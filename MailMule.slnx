@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/.dev/" />
+  <Folder Name="/aspire/">
+    <Project Path="aspire/CPCA.MailMule.AppHost/CPCA.MailMule.AppHost.csproj" />
+    <Project Path="aspire/CPCA.MailMule.ServiceDefaults/CPCA.MailMule.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/CPCA.MailMule.ApiService/CPCA.MailMule.ApiService.csproj" />
+    <Project Path="src/CPCA.MailMule.Backend/CPCA.MailMule.Backend.csproj" />
+    <Project Path="src/CPCA.MailMule.Frontend/CPCA.MailMule.Frontend.csproj" Id="61e21b24-ca6c-44c3-9e91-62b5f1c8f868" />
+    <Project Path="src/CPCA.MailMule.Shared/CPCA.MailMule.Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CPCA.MailMule.Tests/CPCA.MailMule.Tests.csproj" />
+  </Folder>
+</Solution>

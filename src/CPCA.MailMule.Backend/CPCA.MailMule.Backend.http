@@ -1,0 +1,6 @@
+@CPCA.MailMule.Backend_HostAddress = http://localhost:5001
+
+GET {{CPCA.MailMule.Backend_HostAddress}}/api/weather
+Accept: application/json
+
+###

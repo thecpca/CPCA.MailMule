@@ -1,0 +1,9 @@
+﻿@inject NavigationManager Navigation
+@inject HttpClient Http
+
+@code {
+    protected override void OnInitialized()
+    {
+        Navigation.NavigateTo($"{Http.BaseAddress}signin", forceLoad: true);
+    }
+}

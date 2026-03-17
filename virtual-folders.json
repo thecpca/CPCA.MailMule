@@ -1,0 +1,25 @@
+{
+    "solutionFolders": {
+        "/.dev/": {
+            "path": ".",
+            "include": [
+                ".editorconfig",
+                ".gitignore",
+                "*.props",
+                "*.targets",
+                "*.md",
+                "*.json"
+            ],
+            "exclude": [
+                "*.slnx"
+            ]
+        },
+        "/.docs/": {
+            "path": "docs",
+            "recurse": true,
+            "include": [
+                "**/*.md"
+            ]
+        }
+    }
+}

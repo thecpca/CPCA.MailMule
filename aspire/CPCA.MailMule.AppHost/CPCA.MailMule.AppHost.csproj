@@ -1,0 +1,18 @@
+﻿<Project Sdk="Aspire.AppHost.Sdk/13.1.2">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>25780aab-6d1d-491e-aaf1-1f5d23e4bcb4</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CPCA.MailMule.ApiService\CPCA.MailMule.ApiService.csproj" />
+    <ProjectReference Include="..\..\src\CPCA.MailMule.Backend\CPCA.MailMule.Backend.csproj" />
+    <ProjectReference Include="..\..\src\CPCA.MailMule.Frontend\CPCA.MailMule.Frontend.csproj" />
+    <ProjectReference Include="..\..\src\CPCA.MailMule.Shared\CPCA.MailMule.Shared.csproj" IsAspireProjectResource="false" />
+  </ItemGroup>
+
+</Project>

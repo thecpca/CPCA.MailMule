@@ -1,0 +1,6 @@
+@ApiService_HostAddress = http://localhost:6001
+
+GET {{ApiService_HostAddress}}/Weather/
+Accept: application/json
+
+###
