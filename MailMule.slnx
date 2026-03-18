@@ -1,5 +1,13 @@
 <Solution>
-  <Folder Name="/.dev/" />
+  <Folder Name="/.dev/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path="Directory.Build.props" />
+    <File Path="LICENSE.md" />
+    <File Path="README.md" />
+    <File Path="version.json" />
+    <File Path="virtual-folders.json" />
+  </Folder>
   <Folder Name="/aspire/">
     <Project Path="aspire/CPCA.MailMule.AppHost/CPCA.MailMule.AppHost.csproj" />
     <Project Path="aspire/CPCA.MailMule.ServiceDefaults/CPCA.MailMule.ServiceDefaults.csproj" />
@@ -8,12 +16,21 @@
     <File Path=".editorconfig" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/CPCA.MailMule.ApiService/CPCA.MailMule.ApiService.csproj" />
+    <Project Path="src/CPCA.MailMule.ImapService/CPCA.MailMule.ImapService.csproj" />
+    <Project Path="src/CPCA.MailMule.Application.Contracts/CPCA.MailMule.Application.Contracts.csproj" />
+    <Project Path="src/CPCA.MailMule.Application/CPCA.MailMule.Application.csproj" />
     <Project Path="src/CPCA.MailMule.Backend/CPCA.MailMule.Backend.csproj" />
-    <Project Path="src/CPCA.MailMule.Frontend/CPCA.MailMule.Frontend.csproj" Id="61e21b24-ca6c-44c3-9e91-62b5f1c8f868" />
+    <Project Path="src/CPCA.MailMule.Core/CPCA.MailMule.Core.csproj" />
+    <Project Path="src/CPCA.MailMule.Domain.Shared/CPCA.MailMule.Domain.Shared.csproj" />
+    <Project Path="src/CPCA.MailMule.Domain/CPCA.MailMule.Domain.csproj" />
+    <Project Path="src/CPCA.MailMule.Persistence.PostgreSql/CPCA.MailMule.Persistence.PostgreSql.csproj" />
+    <Project Path="src/CPCA.MailMule.Persistence/CPCA.MailMule.Persistence.csproj" />
     <Project Path="src/CPCA.MailMule.Shared/CPCA.MailMule.Shared.csproj" />
+    <Project Path="src/CPCA.MailMule.WebApi.Client/CPCA.MailMule.WebApi.Client.csproj" />
+    <Project Path="src/CPCA.MailMule.WebApi/CPCA.MailMule.WebApi.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/CPCA.MailMule.Tests/CPCA.MailMule.Tests.csproj" />
   </Folder>
+  <Project Path="src/CPCA.MailMule.Frontend/CPCA.MailMule.Frontend.csproj" Id="61e21b24-ca6c-44c3-9e91-62b5f1c8f868" />
 </Solution>

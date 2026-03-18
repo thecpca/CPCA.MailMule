@@ -1,0 +1,29 @@
+@page "/message/router"
+
+<PageTitle>Message Routing</PageTitle>
+
+<MudText Typo="Typo.h3" GutterBottom="true">Message Routing</MudText>
+
+<MudStack Row="true">
+    <MudPaper Class="pa-3">
+        <MudPaper>
+            <MudText Typo="Typo.h4">Incoming</MudText>
+            @foreach (var item in Enumerable.Range(1, 10))
+            {
+                <MudText>
+                    {item.Subject}
+                </MudText>
+            }
+        </MudPaper>
+    </MudPaper>
+    <MudPaper>
+        <MudPaper>
+            <MudText Typo="Typo.h4">Message</MudText>
+        </MudPaper>
+    </MudPaper>
+    <MudPaper>
+        <MudPaper>
+            <MudText Typo="Typo.h4">Outgoing</MudText>
+        </MudPaper>
+    </MudPaper>
+</MudStack>

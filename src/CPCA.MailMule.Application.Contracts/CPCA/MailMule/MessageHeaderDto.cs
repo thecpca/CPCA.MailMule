@@ -12,32 +12,14 @@
 // You should have received a copy of the GNU Affero General Public License along with this
 // program. If not, see <https://www.gnu.org/licenses/>.
 
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Components;
-using System.Net.Http.Json;
+namespace CPCA.MailMule;
 
-namespace CPCA.MailMule.Frontend.Pages;
-
-[Authorize]
-public partial class Weather
+public class MessageHeaderDto
 {
-    [Inject] private HttpClient Http { get; set; } = default!;
-
-    private WeatherForecast[]? _forecasts;
-
-    protected override async Task OnInitializedAsync()
-    {
-        _forecasts = await Http.GetFromJsonAsync<WeatherForecast[]>("api/Weather");
-    }
-
-    public class WeatherForecast
-    {
-        public DateOnly Date { get; set; }
-
-        public Int32 TemperatureC { get; set; }
-
-        public String? Summary { get; set; }
-
-        public Int32 TemperatureF => 32 + (Int32)(TemperatureC / 0.5556);
-    }
+    public MessageId MessageId { get; set; }
+    public FullEmail From { get; set; } = default!;
+    public IReadOnlyCollection<FullEmail> To { get; set; } = [];
+    public String Subject { get; set; } = String.Empty;
+    public DateTimeOffset DateSent { get; set; }
+    public DateTimeOffset DateReceived { get; set; }
 }

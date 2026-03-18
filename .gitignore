@@ -385,12 +385,4 @@ appsettings.*.json
 .npmrc
 GitVersion.json
 temp*.json
-
-modules/website/CPCA.Website.Web/user-secrets.ps1
-modules/website/Themes/CPCA.Website.Assan/wwwroot/assets/contact/
-modules/website/CPCA.Website.Web/wwwroot/Default/
-
-resources/App_Data_Known_Good.rar
-
-src/CPCA.Presentation.Client/wwwroot/js/bootstrap.bundle.js
-src/CPCA.Presentation.Client/wwwroot/js/bootstrap.bundle.min.js
+COPILOT.md
