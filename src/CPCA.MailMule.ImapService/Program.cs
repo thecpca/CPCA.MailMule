@@ -13,6 +13,9 @@
 // program. If not, see <https://www.gnu.org/licenses/>.
 
 using CPCA.MailMule;
+using CPCA.MailMule.ImapService.HealthChecks;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Core;
@@ -50,6 +53,10 @@ public partial class Program
 
         builder.Services.AddMailMule(options => options.UsePostgreSql(connstring));
         builder.Services.AddMailMuleApplication();
+
+        builder.Services
+            .AddHealthChecks()
+            .AddCheck<ImapMailboxReadyHealthCheck>("imap_mailboxes", tags: ["ready"]);
 
         builder.Services.AddControllers();
 
@@ -93,6 +100,16 @@ public partial class Program
         }
 
         app.MapGet("/", () => "API service is running. Navigate to /GetWeatherForecast to see sample data.");
+
+        app.MapHealthChecks("/health/live", new HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains("live")
+        });
+
+        app.MapHealthChecks("/health/ready", new HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains("ready")
+        });
 
         app.MapControllers();
         app.MapDefaultEndpoints();
