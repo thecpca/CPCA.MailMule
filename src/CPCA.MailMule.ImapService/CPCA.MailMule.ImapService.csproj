@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\aspire\CPCA.MailMule.ServiceDefaults\CPCA.MailMule.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\CPCA.MailMule.Persistence.PostgreSql\CPCA.MailMule.Persistence.PostgreSql.csproj" />
     <ProjectReference Include="..\CPCA.MailMule.Shared\CPCA.MailMule.Shared.csproj" />
   </ItemGroup>
 

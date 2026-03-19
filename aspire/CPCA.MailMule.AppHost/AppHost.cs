@@ -6,17 +6,22 @@ public partial class Program
     {
         var builder = DistributedApplication.CreateBuilder(args);
 
-        var apiService = builder.AddProject<Projects.CPCA_MailMule_ApiService>(MailMuleEndpoints.WebApi);
+        var postgres = builder.AddPostgres("postgres");
+        var mailMuleDatabase = postgres.AddDatabase("MailMule");
+
+        var imapService = builder.AddProject<Projects.CPCA_MailMule_ImapService>(MailMuleEndpoints.ImapService)
+                .WithReference(mailMuleDatabase);
                 // .WithHttpHealthCheck("/health");
 
         var backEnd = builder.AddProject<Projects.CPCA_MailMule_Backend>(MailMuleEndpoints.Backend)
                 .WithExternalHttpEndpoints()
+                .WithReference(mailMuleDatabase)
                 // .WithHttpHealthCheck("/health")
-                .WithReference(apiService);
+                .WithReference(imapService);
 
         var frontEnd = builder.AddProject<Projects.CPCA_MailMule_Frontend>(MailMuleEndpoints.Frontend)
                 .WithExternalHttpEndpoints()
-                .WithReference(apiService)
+                .WithReference(imapService)
                 .WithReference(backEnd)
                 .WaitFor(backEnd);
 

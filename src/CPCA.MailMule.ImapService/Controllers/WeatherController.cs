@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace CPCA.MailMule.ApiService.Controllers;
+namespace CPCA.MailMule.ImapService.Controllers;
 
 [Authorize]
 [ApiController]

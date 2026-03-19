@@ -10,7 +10,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
-    "MailMuleApiService": {
+    "MailMuleImapService": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": false,
@@ -18,9 +18,8 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
-    }
-  },
-    "MailMuleApiService (Dockerfile)": {
+    },
+    "MailMuleImapService (Dockerfile)": {
       "commandName": "Docker",
       "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}",
       "environmentVariables": {
@@ -30,4 +29,5 @@
       "publishAllPorts": true,
       "useSSL": true
     }
+  }
 }

@@ -24,7 +24,7 @@ public class InternalTokenService
 
         var token = new JwtSecurityToken(
             issuer: MailMuleEndpoints.Backend,
-            audience: MailMuleEndpoints.WebApi,
+            audience: MailMuleEndpoints.ImapService,
             claims: [new Claim("sub", subject)],
             expires: DateTime.UtcNow.AddMinutes(5),
             signingCredentials: _creds);

@@ -1,4 +1,4 @@
-namespace CPCA.MailMule.ApiService;
+namespace CPCA.MailMule.ImapService;
 
 public record WeatherForecast(DateOnly Date, Int32 TemperatureC, String? Summary)
 {

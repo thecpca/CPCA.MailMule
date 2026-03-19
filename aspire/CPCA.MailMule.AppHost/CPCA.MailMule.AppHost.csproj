@@ -9,7 +9,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\CPCA.MailMule.ApiService\CPCA.MailMule.ApiService.csproj" />
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.1.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CPCA.MailMule.ImapService\CPCA.MailMule.ImapService.csproj" />
     <ProjectReference Include="..\..\src\CPCA.MailMule.Backend\CPCA.MailMule.Backend.csproj" />
     <ProjectReference Include="..\..\src\CPCA.MailMule.Frontend\CPCA.MailMule.Frontend.csproj" />
     <ProjectReference Include="..\..\src\CPCA.MailMule.Shared\CPCA.MailMule.Shared.csproj" IsAspireProjectResource="false" />

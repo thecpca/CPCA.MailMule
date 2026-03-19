@@ -12,13 +12,14 @@
 // You should have received a copy of the GNU Affero General Public License along with this
 // program. If not, see <https://www.gnu.org/licenses/>.
 
+using CPCA.MailMule;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
 using System.Security.Cryptography;
 
-namespace CPCA.MailMule.ApiService;
+namespace CPCA.MailMule.ImapService;
 
 public partial class Program
 {
@@ -44,6 +45,11 @@ public partial class Program
         // Add services to the container.
         builder.Services.AddProblemDetails();
 
+        var connstring = builder.Configuration.GetConnectionString("MailMule")
+            ?? throw new InvalidOperationException("Connection string 'MailMule' is not configured.");
+
+        builder.Services.AddMailMule(options => options.UsePostgreSql(connstring));
+
         builder.Services.AddControllers();
 
         // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -62,7 +68,7 @@ public partial class Program
                     ValidIssuer = MailMuleEndpoints.Backend,
 
                     ValidateAudience = true,
-                    ValidAudience = MailMuleEndpoints.WebApi,
+                    ValidAudience = MailMuleEndpoints.ImapService,
 
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = new RsaSecurityKey(rsa),

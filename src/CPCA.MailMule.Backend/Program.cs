@@ -12,6 +12,7 @@
 // You should have received a copy of the GNU Affero General Public License along with this
 // program. If not, see <https://www.gnu.org/licenses/>.
 
+using CPCA.MailMule;
 using CPCA.MailMule.Backend.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -48,6 +49,11 @@ public static class Program
 
         // Add services to the container.
         builder.Services.AddProblemDetails();
+
+        var connstring = builder.Configuration.GetConnectionString("MailMule")
+            ?? throw new InvalidOperationException("Connection string 'MailMule' is not configured.");
+
+        builder.Services.AddMailMule(options => options.UsePostgreSql(connstring));
 
         // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
         builder.Services.AddOpenApi();
@@ -124,7 +130,7 @@ public static class Program
         // AddHttpForwarderWithServiceDiscovery registers IHttpForwarder backed by an
         // IHttpClientFactory-managed HttpClient. AddServiceDefaults already wired
         // Aspire service discovery into ConfigureHttpClientDefaults, so the forwarder's
-        // client resolves "apiservice" from the Aspire-injected environment variables.
+        // client resolves "imapservice" from the Aspire-injected environment variables.
         builder.Services.AddHttpForwarderWithServiceDiscovery();
 
         builder.Services.AddSingleton<InternalTokenService>();
@@ -149,10 +155,10 @@ public static class Program
         app.UseAuthentication();
         app.UseAuthorization();
 
-        // Catch-all forwarding to the ApiService. The JwtInjectingTransformer adds
-        // the internal Bearer token so the ApiService can validate the caller.
+        // Catch-all forwarding to the ImapService. The JwtInjectingTransformer adds
+        // the internal Bearer token so the ImapService can validate the caller.
         // The local /api/secure endpoint below takes priority over this catch-all.
-        app.MapForwarder("/api/{**catch-all}", $"https://{MailMuleEndpoints.WebApi}",
+        app.MapForwarder("/api/{**catch-all}", $"https://{MailMuleEndpoints.ImapService}",
             new ForwarderRequestConfig(),
             new JwtInjectingTransformer())
             .RequireAuthorization();
