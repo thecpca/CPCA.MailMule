@@ -1,6 +1,7 @@
 using CPCA.MailMule.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MimeKit;
 
 namespace CPCA.MailMule.ImapService.Controllers;
 
@@ -17,7 +18,7 @@ public sealed class MessagesController(IMailboxService mailboxService) : Control
     }
 
     [HttpGet("{mailboxId:guid}/{uid:long}")]
-    public async Task<IActionResult> GetMessage(Guid mailboxId, UInt32 uid, CancellationToken cancellationToken)
+    public async Task<ActionResult<MessageBodyDto>> GetMessage(Guid mailboxId, UInt32 uid, CancellationToken cancellationToken)
     {
         try
         {
@@ -25,7 +26,9 @@ public sealed class MessagesController(IMailboxService mailboxService) : Control
                 new MessageId(new MailboxId(mailboxId), uid),
                 cancellationToken);
 
-            return Content(message.ToString(), "message/rfc822");
+            return Ok(new MessageBodyDto(
+                HtmlBody: FindBody(message, "text/html"),
+                TextBody: FindBody(message, "text/plain")));
         }
         catch (KeyNotFoundException)
         {
@@ -74,5 +77,13 @@ public sealed class MessagesController(IMailboxService mailboxService) : Control
         {
             return BadRequest(ex.Message);
         }
+    }
+
+    private static String? FindBody(MimeMessage message, String mimeType)
+    {
+        return message.BodyParts
+            .OfType<TextPart>()
+            .FirstOrDefault(part => String.Equals(part.ContentType.MimeType, mimeType, StringComparison.OrdinalIgnoreCase))
+            ?.Text;
     }
 }

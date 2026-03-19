@@ -44,8 +44,8 @@
                 <MudTextField @bind-Value="formData.SentFolderPath" Label="Sent Folder Path" 
                     Variant="Variant.Outlined" HelperText="Leave empty for default" />
                 
-                <MudTextField @bind-Value="formData.TrashFolderPath" Label="Trash Folder Path" 
-                    Variant="Variant.Outlined" HelperText="Leave empty for default" />
+                <MudTextField @bind-Value="formData.TrashFolderPath" Label="Trash / Archive Folder Path" 
+                    Variant="Variant.Outlined" HelperText="Required for incoming mailboxes when messages are retained" />
 
                 <MudNumericField @bind-Value="formData.PollIntervalSeconds" Label="Polling Interval (seconds)" 
                     Variant="Variant.Outlined" Min="10" Max="3600" HelperText="How often to check for new messages" />

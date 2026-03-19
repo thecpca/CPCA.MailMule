@@ -211,12 +211,8 @@ internal sealed class MailKitMailboxService(
             return;
         }
 
-        logger.LogWarning(
-            "DeleteMessage is false but no archive path is configured for source mailbox {MailboxId}; deleting message as fallback.",
-            sourceMailbox.Id);
-
-        await sourceFolder.AddFlagsAsync(uid, MessageFlags.Deleted, true, cancellationToken);
-        await sourceFolder.ExpungeAsync(cancellationToken);
+        throw new InvalidOperationException(
+            $"DeleteMessage is false but mailbox {sourceMailbox.Id} does not have a Trash/Archive folder path configured.");
     }
 
     private static SecureSocketOptions ParseSecurity(String security)

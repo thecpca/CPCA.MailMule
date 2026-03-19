@@ -43,6 +43,8 @@ internal sealed class MailboxConfigService : IMailboxConfigService
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        ValidateIncomingRetentionConfiguration(request.MailboxType, request.DeleteMessage, request.TrashFolderPath);
+
         this.logger.LogInformation("Creating mailbox: {DisplayName}", request.DisplayName);
 
         // Check for duplicate display name
@@ -82,6 +84,8 @@ internal sealed class MailboxConfigService : IMailboxConfigService
     public async Task UpdateMailboxAsync(UpdateMailboxConfigDto request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        ValidateIncomingRetentionConfiguration(request.MailboxType, request.DeleteMessage, request.TrashFolderPath);
 
         this.logger.LogInformation("Updating mailbox: {MailboxId}", request.Id);
 
@@ -155,6 +159,20 @@ internal sealed class MailboxConfigService : IMailboxConfigService
         }
 
         return await this.imapConnectionTester.TestConnectionAsync(request, cancellationToken);
+    }
+
+    private static void ValidateIncomingRetentionConfiguration(String mailboxType, Boolean deleteMessage, String? archiveOrJunkFolderPath)
+    {
+        if (!mailboxType.Equals("Incoming", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (!deleteMessage && String.IsNullOrWhiteSpace(archiveOrJunkFolderPath))
+        {
+            throw new InvalidOperationException(
+                "Incoming mailboxes that retain messages must configure a Trash/Archive folder path.");
+        }
     }
 
     private MailboxConfigDto MapToDto(MailboxConfig mailbox)

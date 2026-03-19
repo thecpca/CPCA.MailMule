@@ -8,6 +8,64 @@ namespace CPCA.MailMule.Tests;
 public sealed class MailboxConfigServiceConnectionTests
 {
     [Fact]
+    public async Task CreateMailboxAsync_IncomingMailboxWithoutDeleteAndWithoutArchiveFolder_Throws()
+    {
+        // Arrange
+        var service = BuildServiceProvider(new SpyImapConnectionTester()).GetRequiredService<IMailboxConfigService>();
+
+        var request = new CreateMailboxConfigDto(
+            DisplayName: "Incoming A",
+            ImapHost: "imap.example.com",
+            ImapPort: 993,
+            MailboxType: "Incoming",
+            Security: "Ssl",
+            Username: "user@example.com",
+            Password: "secret",
+            InboxFolderPath: "INBOX",
+            OutboxFolderPath: null,
+            SentFolderPath: null,
+            TrashFolderPath: null,
+            PollIntervalSeconds: 300,
+            DeleteMessage: false,
+            IsActive: true,
+            SortOrder: 0);
+
+        // Act / Assert
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateMailboxAsync(request, TestContext.Current.CancellationToken));
+        Assert.Equal("Incoming mailboxes that retain messages must configure a Trash/Archive folder path.", ex.Message);
+    }
+
+    [Fact]
+    public async Task CreateMailboxAsync_IncomingMailboxWithoutDeleteAndWithArchiveFolder_Succeeds()
+    {
+        // Arrange
+        var service = BuildServiceProvider(new SpyImapConnectionTester()).GetRequiredService<IMailboxConfigService>();
+
+        var request = new CreateMailboxConfigDto(
+            DisplayName: "Incoming B",
+            ImapHost: "imap.example.com",
+            ImapPort: 993,
+            MailboxType: "Incoming",
+            Security: "Ssl",
+            Username: "user@example.com",
+            Password: "secret",
+            InboxFolderPath: "INBOX",
+            OutboxFolderPath: null,
+            SentFolderPath: null,
+            TrashFolderPath: "Archive",
+            PollIntervalSeconds: 300,
+            DeleteMessage: false,
+            IsActive: true,
+            SortOrder: 0);
+
+        // Act
+        var id = await service.CreateMailboxAsync(request, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.True(id > 0);
+    }
+
+    [Fact]
     public async Task TestConnectionAsync_WithInvalidHost_ReturnsValidationErrorWithoutCallingImapTester()
     {
         // Arrange

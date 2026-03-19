@@ -51,6 +51,7 @@ public static class Program
         // Register API clients
         builder.Services.AddScoped<MailboxConfigApiClient>();
         builder.Services.AddScoped<MessageApiClient>();
+        builder.Services.AddScoped<PostOffice>();
 
 
         var app = builder.Build();

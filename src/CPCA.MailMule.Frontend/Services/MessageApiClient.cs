@@ -17,11 +17,13 @@ public sealed class MessageApiClient(HttpClient httpClient)
         }
     }
 
-    public async Task<String?> GetRawMessageAsync(MessageId messageId, CancellationToken cancellationToken = default)
+    public async Task<MessageBodyDto?> GetMessageAsync(MessageId messageId, CancellationToken cancellationToken = default)
     {
         try
         {
-            return await httpClient.GetStringAsync($"/api/messages/{messageId.Mailbox.Value}/{messageId.Uid}", cancellationToken);
+            return await httpClient.GetFromJsonAsync<MessageBodyDto>(
+                $"/api/messages/{messageId.Mailbox.Value}/{messageId.Uid}",
+                cancellationToken);
         }
         catch
         {

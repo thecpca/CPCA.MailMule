@@ -1,5 +1,16 @@
 {
     "cSpell.words": [
-        "CPCA"
+        "Consolas",
+        "CPCA",
+        "stackalloc"
+    ],
+    "cSpell.ignoreWords": [
+        "Authentik",
+        "Ganss",
+        "Npgsql",
+        "Spaminess",
+        "UIDPLUS",
+        "UIDVALIDITY",
+        "slnx"
     ]
 }

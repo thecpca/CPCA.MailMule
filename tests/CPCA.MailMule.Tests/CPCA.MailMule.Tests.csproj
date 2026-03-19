@@ -28,6 +28,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\aspire\CPCA.MailMule.AppHost\CPCA.MailMule.AppHost.csproj" />
     <ProjectReference Include="..\..\src\CPCA.MailMule.Application\CPCA.MailMule.Application.csproj" />
+    <ProjectReference Include="..\..\src\CPCA.MailMule.Frontend\CPCA.MailMule.Frontend.csproj" />
     <ProjectReference Include="..\..\src\CPCA.MailMule.Persistence\CPCA.MailMule.Persistence.csproj" />
   </ItemGroup>
 

@@ -1,5 +1,6 @@
 @page "/message/router"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components
 @attribute [Authorize]
 @implements IDisposable
 
@@ -20,19 +21,19 @@
         <MudItem xs="12" md="4">
             <MudPaper Class="pa-3">
                 <MudText Typo="Typo.h6" Class="mb-2">Incoming</MudText>
-                @if (headers.Count == 0)
+                @if (PostOffice.Inbox.Count == 0)
                 {
                     <MudText Typo="Typo.body2">No messages available.</MudText>
                 }
                 else
                 {
-                    <MudList T="MessageHeader">
-                        @foreach (var header in headers)
+                    <MudList T="MessageHeaderDto">
+                        @foreach (var header in PostOffice.Inbox)
                         {
-                            <MudListItem T="MessageHeader" Value="header" OnClick="@(() => SelectMessageAsync(header))" Class="mb-1">
+                            <MudListItem T="MessageHeaderDto" Value="header" OnClick="@(() => SelectMessageAsync(header))" Class="mb-1">
                                 <MudText Typo="Typo.subtitle2">@header.Subject</MudText>
                                 <MudText Typo="Typo.caption">@FormatFrom(header.From)</MudText>
-                                <MudText Typo="Typo.caption">@header.Date.LocalDateTime</MudText>
+                                <MudText Typo="Typo.caption">@header.DateReceived.LocalDateTime</MudText>
                             </MudListItem>
                         }
                     </MudList>
@@ -55,9 +56,19 @@
                 {
                     <MudText Typo="Typo.subtitle2" Class="mb-2">@selectedHeader.Subject</MudText>
                     <MudText Typo="Typo.caption" Class="mb-2">@FormatFrom(selectedHeader.From)</MudText>
-                    <MudPaper Class="pa-2" Outlined="true" Style="max-height: 460px; overflow: auto; white-space: pre-wrap; font-family: Consolas, monospace;">
-                        @(rawMessage ?? "(Unable to load message body)")
-                    </MudPaper>
+
+                    @if (!String.IsNullOrWhiteSpace(sanitizedHtmlBody))
+                    {
+                        <MudPaper Class="pa-2" Outlined="true" Style="max-height: 460px; overflow: auto;">
+                            @htmlPreview
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudPaper Class="pa-2" Outlined="true" Style="max-height: 460px; overflow: auto; white-space: pre-wrap; font-family: Consolas, monospace;">
+                            @(plainTextBody ?? "(Unable to load message body)")
+                        </MudPaper>
+                    }
                 }
             </MudPaper>
         </MudItem>
@@ -89,23 +100,23 @@
                 <MudDivider Class="my-2" />
                 <MudText Typo="Typo.subtitle2" Class="mb-1">Outbox Queue</MudText>
 
-                @if (pendingRoutes.Count == 0)
+                @if (PostOffice.Outbox.Count == 0)
                 {
                     <MudText Typo="Typo.caption">No pending routes.</MudText>
                 }
                 else
                 {
-                    @foreach (var pending in pendingRoutes)
+                    @foreach (var pending in PostOffice.Outbox)
                     {
                         <MudPaper Class="pa-2 mb-2" Outlined="true">
-                            <MudText Typo="Typo.caption">@pending.Header.Subject</MudText>
+                            <MudText Typo="Typo.caption">@pending.MessageHeader.Subject</MudText>
                             <MudText Typo="Typo.caption">
-                                @(pending.ActionType == PendingActionType.Junk ? "Junk" : $"Route: {pending.DestinationName}")
+                                @(pending.Action == PostOffice.PendingAction.Junk ? "Junk" : $"Route: {GetMailboxDisplayName(pending.Destination)}")
                             </MudText>
                             <MudText Typo="Typo.caption">Undo: @pending.RemainingSeconds s</MudText>
                             <MudStack Row="true" Spacing="1" Class="mt-1">
-                                <MudButton Variant="Variant.Text" Color="Color.Error" Disabled="@pending.IsExecuting" OnClick="@(() => CancelPending(pending.Id))">Cancel</MudButton>
-                                <MudButton Variant="Variant.Text" Color="Color.Primary" Disabled="@pending.IsExecuting" OnClick="@(() => ExecuteNowAsync(pending.Id))">Execute</MudButton>
+                                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="@(() => CancelPending(pending.MessageHeader.MessageId))">Cancel</MudButton>
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => ExecuteNowAsync(pending.MessageHeader.MessageId))">Execute</MudButton>
                             </MudStack>
                         </MudPaper>
                     }
@@ -122,23 +133,27 @@
     [Inject]
     public MailboxConfigApiClient MailboxConfigApiClient { get; set; } = default!;
 
-    private readonly List<MessageHeader> headers = [];
-    private readonly List<MailboxConfigDto> outgoingMailboxes = [];
-    private readonly List<PendingRoute> pendingRoutes = [];
-    private readonly CancellationTokenSource timerCts = new();
+    [Inject]
+    public PostOffice PostOffice { get; set; } = default!;
 
-    private MessageHeader? selectedHeader;
-    private String? rawMessage;
+    private readonly List<MailboxConfigDto> outgoingMailboxes = [];
+    private readonly CancellationTokenSource timerCts = new();
+    private readonly Ganss.Xss.HtmlSanitizer htmlSanitizer = new();
+
+    private MessageHeaderDto? selectedHeader;
+    private String? plainTextBody;
+    private String? sanitizedHtmlBody;
+    private MarkupString htmlPreview;
 
     private Boolean isLoading;
     private Boolean isLoadingMessage;
 
     private String? statusMessage;
     private Severity statusSeverity = Severity.Info;
-    private const Int32 UndoWindowSeconds = 15;
-
     protected override async Task OnInitializedAsync()
     {
+        PostOffice.Changed += HandlePostOfficeChanged;
+        PostOffice.UndoWindowSeconds = 15;
         await LoadAsync();
         _ = Task.Run(() => RunPendingQueueAsync(timerCts.Token));
     }
@@ -150,20 +165,22 @@
 
         var loadedHeaders = await MessageApiClient.GetHeadersAsync();
         var loadedOutgoing = await MailboxConfigApiClient.GetMailboxesByTypeAsync("Outgoing") ?? [];
+        var syncedHeaders = loadedHeaders.Select(ToDto).ToArray();
 
-        headers.Clear();
-        headers.AddRange(loadedHeaders);
+        await PostOffice.SyncInboxAsync(syncedHeaders, CancellationToken.None);
 
         outgoingMailboxes.Clear();
         outgoingMailboxes.AddRange(loadedOutgoing.Where(x => x.IsActive));
 
         if (selectedHeader != null)
         {
-            var stillExists = headers.FirstOrDefault(x => x.Id == selectedHeader.Id);
+            var stillExists = PostOffice.Inbox.FirstOrDefault(x => x.MessageId == selectedHeader.MessageId);
             if (stillExists == null)
             {
                 selectedHeader = null;
-                rawMessage = null;
+                plainTextBody = null;
+                sanitizedHtmlBody = null;
+                htmlPreview = default;
             }
             else
             {
@@ -174,11 +191,21 @@
         isLoading = false;
     }
 
-    private async Task SelectMessageAsync(MessageHeader header)
+    private async Task SelectMessageAsync(MessageHeaderDto header)
     {
         selectedHeader = header;
         isLoadingMessage = true;
-        rawMessage = await MessageApiClient.GetRawMessageAsync(header.Id);
+        plainTextBody = null;
+        sanitizedHtmlBody = null;
+        htmlPreview = default;
+
+        var message = await MessageApiClient.GetMessageAsync(header.MessageId);
+        plainTextBody = message?.TextBody;
+        sanitizedHtmlBody = String.IsNullOrWhiteSpace(message?.HtmlBody)
+            ? null
+            : htmlSanitizer.Sanitize(message.HtmlBody);
+        htmlPreview = new MarkupString(sanitizedHtmlBody ?? String.Empty);
+
         isLoadingMessage = false;
     }
 
@@ -189,8 +216,7 @@
             return Task.CompletedTask;
         }
 
-        QueuePending(selectedHeader, PendingActionType.Junk, null);
-        return Task.CompletedTask;
+        return PostOffice.QueueJunkAsync(selectedHeader, CancellationToken.None);
     }
 
     private Task QueueRouteToMailboxAsync(MailboxConfigDto destination)
@@ -200,61 +226,23 @@
             return Task.CompletedTask;
         }
 
-        QueuePending(selectedHeader, PendingActionType.Mailbox, destination);
-        return Task.CompletedTask;
+        return PostOffice.QueueDeliveryAsync(
+            selectedHeader.MessageId,
+            new MailboxId(ToGuidFromInt64(destination.Id)),
+            CancellationToken.None);
     }
 
-    private void QueuePending(MessageHeader header, PendingActionType actionType, MailboxConfigDto? destination)
+    private async Task CancelPending(MessageId messageId)
     {
-        var pending = new PendingRoute(
-            Guid.NewGuid(),
-            header,
-            actionType,
-            destination?.DisplayName,
-            destination == null ? null : new MailboxId(ToGuidFromInt64(destination.Id)),
-            DateTimeOffset.UtcNow.AddSeconds(UndoWindowSeconds));
-
-        pendingRoutes.Insert(0, pending);
-
-        headers.RemoveAll(x => x.Id == header.Id);
-
-        if (selectedHeader?.Id == header.Id)
-        {
-            selectedHeader = headers.FirstOrDefault();
-            rawMessage = null;
-        }
-
-        statusSeverity = Severity.Info;
-        statusMessage = actionType == PendingActionType.Junk
-            ? "Message queued for junk. Undo timer started."
-            : $"Message queued for routing to {destination?.DisplayName}. Undo timer started.";
-    }
-
-    private void CancelPending(Guid pendingId)
-    {
-        var pending = pendingRoutes.FirstOrDefault(x => x.Id == pendingId);
-        if (pending == null || pending.IsExecuting)
-        {
-            return;
-        }
-
-        pendingRoutes.Remove(pending);
-        headers.Add(pending.Header);
-        headers.Sort((a, b) => b.Date.CompareTo(a.Date));
+        await PostOffice.CancelAsync(messageId, CancellationToken.None);
 
         statusSeverity = Severity.Info;
         statusMessage = "Queued route canceled and message returned to inbox.";
     }
 
-    private async Task ExecuteNowAsync(Guid pendingId)
+    private async Task ExecuteNowAsync(MessageId messageId)
     {
-        var pending = pendingRoutes.FirstOrDefault(x => x.Id == pendingId);
-        if (pending == null)
-        {
-            return;
-        }
-
-        await ExecutePendingAsync(pending);
+        await PostOffice.ExecuteNowAsync(messageId, CancellationToken.None);
         await InvokeAsync(StateHasChanged);
     }
 
@@ -266,9 +254,7 @@
         {
             await InvokeAsync(async () =>
             {
-                var due = pendingRoutes
-                    .Where(x => !x.IsExecuting && x.ExecuteAtUtc <= DateTimeOffset.UtcNow)
-                    .ToList();
+                var due = PostOffice.GetDueEnvelopes(DateTimeOffset.UtcNow);
 
                 foreach (var pending in due)
                 {
@@ -280,52 +266,73 @@
         }
     }
 
-    private async Task ExecutePendingAsync(PendingRoute pending)
+    private async Task ExecutePendingAsync(PostOffice.PendingEnvelope pending)
     {
-        if (pending.IsExecuting)
-        {
-            return;
-        }
-
-        pending.IsExecuting = true;
         Boolean success;
 
-        if (pending.ActionType == PendingActionType.Junk)
+        if (pending.Action == PostOffice.PendingAction.Junk)
         {
-            success = await MessageApiClient.RouteToJunkAsync(pending.Header.Id);
+            success = await MessageApiClient.RouteToJunkAsync(pending.MessageHeader.MessageId);
         }
         else
         {
-            if (pending.DestinationMailboxId == null)
+            if (pending.Destination == null)
             {
                 success = false;
             }
             else
             {
-                success = await MessageApiClient.RouteToMailboxAsync(pending.Header.Id, pending.DestinationMailboxId.Value);
+                success = await MessageApiClient.RouteToMailboxAsync(pending.MessageHeader.MessageId, pending.Destination.Value);
             }
         }
 
         if (success)
         {
             statusSeverity = Severity.Success;
-            statusMessage = pending.ActionType == PendingActionType.Junk
+            statusMessage = pending.Action == PostOffice.PendingAction.Junk
                 ? "Message moved to junk."
-                : $"Message routed to {pending.DestinationName}.";
+                : $"Message routed successfully.";
 
-            pendingRoutes.Remove(pending);
+            await PostOffice.MarkCompletedAsync(pending.MessageHeader.MessageId, CancellationToken.None);
         }
         else
         {
             statusSeverity = Severity.Error;
-            statusMessage = pending.ActionType == PendingActionType.Junk
+            statusMessage = pending.Action == PostOffice.PendingAction.Junk
                 ? "Failed to move message to junk. Message returned to inbox."
-                : $"Failed to route message to {pending.DestinationName}. Message returned to inbox.";
+                : "Failed to route message. Message returned to inbox.";
 
-            pendingRoutes.Remove(pending);
-            headers.Add(pending.Header);
-            headers.Sort((a, b) => b.Date.CompareTo(a.Date));
+            await PostOffice.ReturnToInboxAsync(pending.MessageHeader.MessageId, CancellationToken.None);
         }
+    }
+
+    private void HandlePostOfficeChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private String GetMailboxDisplayName(MailboxId? mailboxId)
+    {
+        if (mailboxId == null)
+        {
+            return "Unknown mailbox";
+        }
+
+        var mailboxKey = ToInt64FromGuid(mailboxId.Value.Value);
+        return outgoingMailboxes.FirstOrDefault(x => x.Id == mailboxKey)?.DisplayName ?? "Unknown mailbox";
+    }
+
+    private static MessageHeaderDto ToDto(MessageHeader header)
+    {
+        return new MessageHeaderDto
+        {
+            MessageId = header.Id,
+            From = header.From,
+            Subject = header.Subject,
+            DateSent = header.Date,
+            DateReceived = header.Date,
+            To = []
+        };
     }
 
     private static String FormatFrom(FullEmail from)
@@ -343,51 +350,16 @@
         return new Guid(bytes);
     }
 
+    private static Int64 ToInt64FromGuid(Guid value)
+    {
+        var bytes = value.ToByteArray();
+        return BitConverter.ToInt64(bytes, 0);
+    }
+
     public void Dispose()
     {
+        PostOffice.Changed -= HandlePostOfficeChanged;
         timerCts.Cancel();
         timerCts.Dispose();
-    }
-
-    private enum PendingActionType
-    {
-        Junk,
-        Mailbox,
-    }
-
-    private sealed class PendingRoute
-    {
-        public PendingRoute(
-            Guid id,
-            MessageHeader header,
-            PendingActionType actionType,
-            String? destinationName,
-            MailboxId? destinationMailboxId,
-            DateTimeOffset executeAtUtc)
-        {
-            Id = id;
-            Header = header;
-            ActionType = actionType;
-            DestinationName = destinationName;
-            DestinationMailboxId = destinationMailboxId;
-            ExecuteAtUtc = executeAtUtc;
-        }
-
-        public Guid Id { get; }
-        public MessageHeader Header { get; }
-        public PendingActionType ActionType { get; }
-        public String? DestinationName { get; }
-        public MailboxId? DestinationMailboxId { get; }
-        public DateTimeOffset ExecuteAtUtc { get; }
-        public Boolean IsExecuting { get; set; }
-
-        public Int32 RemainingSeconds
-        {
-            get
-            {
-                var seconds = (Int32)Math.Ceiling((ExecuteAtUtc - DateTimeOffset.UtcNow).TotalSeconds);
-                return seconds < 0 ? 0 : seconds;
-            }
-        }
     }
 }
