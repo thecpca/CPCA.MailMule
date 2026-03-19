@@ -13,12 +13,15 @@
 // program. If not, see <https://www.gnu.org/licenses/>.
 
 using CPCA.MailMule;
+using CPCA.MailMule.Backend.HealthChecks;
 using CPCA.MailMule.Backend.Services;
 using CPCA.MailMule.Dtos;
 using CPCA.MailMule.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Serilog;
 using Serilog.Core;
@@ -57,6 +60,10 @@ public static class Program
 
         builder.Services.AddMailMule(options => options.UsePostgreSql(connstring));
         builder.Services.AddMailMuleApplication();
+
+        builder.Services
+            .AddHealthChecks()
+            .AddCheck<BackendDatabaseReadyHealthCheck>("database", tags: ["ready"]);
 
         // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
         builder.Services.AddOpenApi();
@@ -213,6 +220,17 @@ public static class Program
             });
         })
         .RequireAuthorization();
+
+        app.MapHealthChecks("/health/live", new HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains("live")
+        });
+
+        app.MapHealthChecks("/health/ready", new HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains("ready")
+        });
+
         // -----------------------------
         // Admin API endpoints
         // -----------------------------
