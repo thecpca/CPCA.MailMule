@@ -35,21 +35,17 @@ public sealed class MailMuleDbContext(DbContextOptions<MailMuleDbContext> option
                 .HasMaxLength(4000)
                 .IsRequired();
 
-            entity.Property(x => x.InboxFolder)
-                .HasMaxLength(255)
-                .IsRequired();
+            entity.Property(x => x.InboxFolderPath)
+                .HasMaxLength(255);
 
-            entity.Property(x => x.JunkFolder)
-                .HasMaxLength(255)
-                .IsRequired();
+            entity.Property(x => x.OutboxFolderPath)
+                .HasMaxLength(255);
 
-            entity.Property(x => x.ArchiveFolder)
-                .HasMaxLength(255)
-                .IsRequired();
+            entity.Property(x => x.SentFolderPath)
+                .HasMaxLength(255);
 
-            entity.Property(x => x.ErrorFolder)
-                .HasMaxLength(255)
-                .IsRequired();
+            entity.Property(x => x.TrashFolderPath)
+                .HasMaxLength(255);
 
             entity.Property(x => x.PollIntervalSeconds)
                 .IsRequired();

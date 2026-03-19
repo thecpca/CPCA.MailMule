@@ -1,11 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
-    <ProjectReference Include="..\CPCA.MailMule.Domain\CPCA.MailMule.Domain.csproj" />
     <ProjectReference Include="..\CPCA.MailMule.Application.Contracts\CPCA.MailMule.Application.Contracts.csproj" />
+    <ProjectReference Include="..\CPCA.MailMule.Persistence\CPCA.MailMule.Persistence.csproj" />
   </ItemGroup>
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>
     </RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 </Project>

@@ -1,5 +1,6 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -27,7 +28,8 @@ namespace CPCA.MailMule.Migrations
                 name: "MailboxConfigs",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     MailboxType = table.Column<int>(type: "integer", nullable: false),
                     DisplayName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     ImapHost = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
@@ -35,14 +37,14 @@ namespace CPCA.MailMule.Migrations
                     Security = table.Column<int>(type: "integer", nullable: false),
                     Username = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false),
                     EncryptedPassword = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: false),
-                    InboxFolder = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
-                    JunkFolder = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
-                    ArchiveFolder = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
-                    ErrorFolder = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    InboxFolderPath = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    OutboxFolderPath = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    SentFolderPath = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    TrashFolderPath = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
                     PollIntervalSeconds = table.Column<int>(type: "integer", nullable: false),
                     DeleteMessage = table.Column<bool>(type: "boolean", nullable: false),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false),
-                    LastPolledUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    LastPolledUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     SortOrder = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>

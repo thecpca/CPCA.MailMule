@@ -14,6 +14,8 @@
 
 using CPCA.MailMule;
 using CPCA.MailMule.Backend.Services;
+using CPCA.MailMule.Dtos;
+using CPCA.MailMule.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -54,6 +56,7 @@ public static class Program
             ?? throw new InvalidOperationException("Connection string 'MailMule' is not configured.");
 
         builder.Services.AddMailMule(options => options.UsePostgreSql(connstring));
+        builder.Services.AddMailMuleApplication();
 
         // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
         builder.Services.AddOpenApi();
@@ -210,7 +213,191 @@ public static class Program
             });
         })
         .RequireAuthorization();
+        // -----------------------------
+        // Admin API endpoints
+        // -----------------------------
+        
+        // GET /admin/incoming - List all incoming mailboxes
+        app.MapGet("/admin/incoming", async (IMailboxConfigService service, CancellationToken ct) =>
+        {
+            var mailboxes = await service.GetMailboxesByTypeAsync("Incoming", ct);
+            return Results.Ok(mailboxes);
+        })
+        .RequireAuthorization()
+        .WithName("ListIncomingMailboxes")
+        .WithOpenApi()
+        .Produces<IEnumerable<MailboxConfigDto>>();
 
+        // POST /admin/incoming - Create incoming mailbox
+        app.MapPost("/admin/incoming", async (CreateMailboxConfigDto dto, IMailboxConfigService service, CancellationToken ct) =>
+        {
+            var id = await service.CreateMailboxAsync(dto with { MailboxType = "Incoming" }, ct);
+            return Results.Created($"/admin/incoming/{id}", id);
+        })
+        .RequireAuthorization()
+        .WithName("CreateIncomingMailbox")
+        .WithOpenApi()
+        .Produces<Int64>(StatusCodes.Status201Created)
+        .Produces(StatusCodes.Status400BadRequest)
+        .Produces(StatusCodes.Status409Conflict);
+
+        // GET /admin/incoming/{id} - Get specific incoming mailbox
+        app.MapGet("/admin/incoming/{id:long}", async (Int64 id, IMailboxConfigService service, CancellationToken ct) =>
+        {
+            var mailbox = await service.GetMailboxAsync(id, ct);
+            return mailbox == null ? Results.NotFound() : Results.Ok(mailbox);
+        })
+        .RequireAuthorization()
+        .WithName("GetIncomingMailbox")
+        .WithOpenApi()
+        .Produces<MailboxConfigDto>()
+        .Produces(StatusCodes.Status404NotFound);
+
+        // PUT /admin/incoming/{id} - Update incoming mailbox
+        app.MapPut("/admin/incoming/{id:long}", async (Int64 id, UpdateMailboxConfigDto dto, IMailboxConfigService service, CancellationToken ct) =>
+        {
+            if (dto.Id != id)
+            {
+                return Results.BadRequest("ID mismatch");
+            }
+
+            try
+            {
+                await service.UpdateMailboxAsync(dto, ct);
+                return Results.NoContent();
+            }
+            catch (KeyNotFoundException)
+            {
+                return Results.NotFound();
+            }
+        })
+        .RequireAuthorization()
+        .WithName("UpdateIncomingMailbox")
+        .WithOpenApi()
+        .Produces(StatusCodes.Status204NoContent)
+        .Produces(StatusCodes.Status400BadRequest)
+        .Produces(StatusCodes.Status404NotFound);
+
+        // DELETE /admin/incoming/{id} - Delete incoming mailbox
+        app.MapDelete("/admin/incoming/{id:long}", async (Int64 id, IMailboxConfigService service, CancellationToken ct) =>
+        {
+            try
+            {
+                await service.DeleteMailboxAsync(id, ct);
+                return Results.NoContent();
+            }
+            catch (KeyNotFoundException)
+            {
+                return Results.NotFound();
+            }
+        })
+        .RequireAuthorization()
+        .WithName("DeleteIncomingMailbox")
+        .WithOpenApi()
+        .Produces(StatusCodes.Status204NoContent)
+        .Produces(StatusCodes.Status404NotFound);
+
+        // POST /admin/incoming/test-connection - Test mailbox connection
+        app.MapPost("/admin/incoming/test-connection", async (MailboxConnectionTestRequest request, IMailboxConfigService service, CancellationToken ct) =>
+        {
+            var result = await service.TestConnectionAsync(request, ct);
+            return Results.Ok(result);
+        })
+        .RequireAuthorization()
+        .WithName("TestIncomingConnection")
+        .WithOpenApi()
+        .Produces<MailboxConnectionTestResult>();
+
+        // GET /admin/outgoing - List all outgoing mailboxes
+        app.MapGet("/admin/outgoing", async (IMailboxConfigService service, CancellationToken ct) =>
+        {
+            var mailboxes = await service.GetMailboxesByTypeAsync("Outgoing", ct);
+            return Results.Ok(mailboxes);
+        })
+        .RequireAuthorization()
+        .WithName("ListOutgoingMailboxes")
+        .WithOpenApi()
+        .Produces<IEnumerable<MailboxConfigDto>>();
+
+        // POST /admin/outgoing - Create outgoing mailbox
+        app.MapPost("/admin/outgoing", async (CreateMailboxConfigDto dto, IMailboxConfigService service, CancellationToken ct) =>
+        {
+            var id = await service.CreateMailboxAsync(dto with { MailboxType = "Outgoing" }, ct);
+            return Results.Created($"/admin/outgoing/{id}", id);
+        })
+        .RequireAuthorization()
+        .WithName("CreateOutgoingMailbox")
+        .WithOpenApi()
+        .Produces<Int64>(StatusCodes.Status201Created)
+        .Produces(StatusCodes.Status400BadRequest)
+        .Produces(StatusCodes.Status409Conflict);
+
+        // GET /admin/outgoing/{id} - Get specific outgoing mailbox
+        app.MapGet("/admin/outgoing/{id:long}", async (Int64 id, IMailboxConfigService service, CancellationToken ct) =>
+        {
+            var mailbox = await service.GetMailboxAsync(id, ct);
+            return mailbox == null ? Results.NotFound() : Results.Ok(mailbox);
+        })
+        .RequireAuthorization()
+        .WithName("GetOutgoingMailbox")
+        .WithOpenApi()
+        .Produces<MailboxConfigDto>()
+        .Produces(StatusCodes.Status404NotFound);
+
+        // PUT /admin/outgoing/{id} - Update outgoing mailbox
+        app.MapPut("/admin/outgoing/{id:long}", async (Int64 id, UpdateMailboxConfigDto dto, IMailboxConfigService service, CancellationToken ct) =>
+        {
+            if (dto.Id != id)
+            {
+                return Results.BadRequest("ID mismatch");
+            }
+
+            try
+            {
+                await service.UpdateMailboxAsync(dto, ct);
+                return Results.NoContent();
+            }
+            catch (KeyNotFoundException)
+            {
+                return Results.NotFound();
+            }
+        })
+        .RequireAuthorization()
+        .WithName("UpdateOutgoingMailbox")
+        .WithOpenApi()
+        .Produces(StatusCodes.Status204NoContent)
+        .Produces(StatusCodes.Status400BadRequest)
+        .Produces(StatusCodes.Status404NotFound);
+
+        // DELETE /admin/outgoing/{id} - Delete outgoing mailbox
+        app.MapDelete("/admin/outgoing/{id:long}", async (Int64 id, IMailboxConfigService service, CancellationToken ct) =>
+        {
+            try
+            {
+                await service.DeleteMailboxAsync(id, ct);
+                return Results.NoContent();
+            }
+            catch (KeyNotFoundException)
+            {
+                return Results.NotFound();
+            }
+        })
+        .RequireAuthorization()
+        .WithName("DeleteOutgoingMailbox")
+        .WithOpenApi()
+        .Produces(StatusCodes.Status204NoContent)
+        .Produces(StatusCodes.Status404NotFound);
+
+        // POST /admin/outgoing/test-connection - Test mailbox connection
+        app.MapPost("/admin/outgoing/test-connection", async (MailboxConnectionTestRequest request, IMailboxConfigService service, CancellationToken ct) =>
+        {
+            var result = await service.TestConnectionAsync(request, ct);
+            return Results.Ok(result);
+        })
+        .RequireAuthorization()
+        .WithName("TestOutgoingConnection")
+        .WithOpenApi()
+        .Produces<MailboxConnectionTestResult>();
         // -----------------------------
         await app.RunAsync();
     }

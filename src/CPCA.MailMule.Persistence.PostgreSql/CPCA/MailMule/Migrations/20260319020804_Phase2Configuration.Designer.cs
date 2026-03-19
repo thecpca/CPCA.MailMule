@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CPCA.MailMule.Migrations
 {
     [DbContext(typeof(MailMuleDbContext))]
-    [Migration("20260319015104_Phase2Configuration")]
+    [Migration("20260319020804_Phase2Configuration")]
     partial class Phase2Configuration
     {
         /// <inheritdoc />
@@ -47,14 +47,11 @@ namespace CPCA.MailMule.Migrations
 
             modelBuilder.Entity("CPCA.MailMule.MailboxConfig", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("bigint");
 
-                    b.Property<string>("ArchiveFolder")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
                     b.Property<bool>("DeleteMessage")
                         .HasColumnType("boolean");
@@ -69,11 +66,6 @@ namespace CPCA.MailMule.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
 
-                    b.Property<string>("ErrorFolder")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
                     b.Property<string>("ImapHost")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -82,24 +74,22 @@ namespace CPCA.MailMule.Migrations
                     b.Property<int>("ImapPort")
                         .HasColumnType("integer");
 
-                    b.Property<string>("InboxFolder")
-                        .IsRequired()
+                    b.Property<string>("InboxFolderPath")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("JunkFolder")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<DateTimeOffset?>("LastPolledUtc")
+                    b.Property<DateTime?>("LastPolledUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("MailboxType")
                         .HasColumnType("integer");
+
+                    b.Property<string>("OutboxFolderPath")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.Property<int>("PollIntervalSeconds")
                         .HasColumnType("integer");
@@ -107,8 +97,16 @@ namespace CPCA.MailMule.Migrations
                     b.Property<int>("Security")
                         .HasColumnType("integer");
 
+                    b.Property<string>("SentFolderPath")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
+
+                    b.Property<string>("TrashFolderPath")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.Property<string>("Username")
                         .IsRequired()

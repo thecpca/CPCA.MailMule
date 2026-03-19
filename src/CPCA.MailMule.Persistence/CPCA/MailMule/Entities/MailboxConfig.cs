@@ -2,7 +2,7 @@ namespace CPCA.MailMule;
 
 public sealed class MailboxConfig
 {
-    public Guid Id { get; set; }
+    public Int64 Id { get; set; }
 
     public MailboxType MailboxType { get; set; } = MailboxType.Undefined;
 
@@ -18,13 +18,13 @@ public sealed class MailboxConfig
 
     public String EncryptedPassword { get; set; } = String.Empty;
 
-    public String InboxFolder { get; set; } = "INBOX";
+    public String? InboxFolderPath { get; set; }
 
-    public String JunkFolder { get; set; } = "Junk E-mail";
+    public String? OutboxFolderPath { get; set; }
 
-    public String ArchiveFolder { get; set; } = "Archive";
+    public String? SentFolderPath { get; set; }
 
-    public String ErrorFolder { get; set; } = "Error";
+    public String? TrashFolderPath { get; set; }
 
     public Int32 PollIntervalSeconds { get; set; } = 20;
 
@@ -32,7 +32,7 @@ public sealed class MailboxConfig
 
     public Boolean IsActive { get; set; } = true;
 
-    public DateTimeOffset? LastPolledUtc { get; set; }
+    public DateTime? LastPolledUtc { get; set; }
 
     public Int32 SortOrder { get; set; }
 }
