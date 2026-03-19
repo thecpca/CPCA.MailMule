@@ -1,7 +1,7 @@
 @page "/message/router"
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Operator,Admin")]
 @implements IDisposable
 
 <PageTitle>Message Routing</PageTitle>
@@ -83,13 +83,13 @@
                 <MudDivider Class="my-2" />
                 <MudText Typo="Typo.subtitle2" Class="mb-1">Route To Mailbox</MudText>
 
-                @if (outgoingMailboxes.Count == 0)
+                @if (PostOfficeWorker.OutgoingMailboxes.Count == 0)
                 {
                     <MudText Typo="Typo.caption">No outgoing mailboxes configured.</MudText>
                 }
                 else
                 {
-                    @foreach (var mailbox in outgoingMailboxes)
+                    @foreach (var mailbox in PostOfficeWorker.OutgoingMailboxes)
                     {
                         <MudButton Variant="Variant.Outlined" Disabled="@(selectedHeader == null)" OnClick="@(() => QueueRouteToMailboxAsync(mailbox))" FullWidth="true" Class="mb-1">
                             @mailbox.DisplayName
@@ -128,17 +128,14 @@
 
 @code {
     [Inject]
-    public MessageApiClient MessageApiClient { get; set; } = default!;
-
-    [Inject]
-    public MailboxConfigApiClient MailboxConfigApiClient { get; set; } = default!;
+    public IMessageApiClient MessageApiClient { get; set; } = default!;
 
     [Inject]
     public PostOffice PostOffice { get; set; } = default!;
 
-    private readonly List<MailboxConfigDto> outgoingMailboxes = [];
-    private readonly CancellationTokenSource timerCts = new();
-    private readonly SemaphoreSlim inboxSyncLock = new(1, 1);
+    [Inject]
+    public PostOfficeWorker PostOfficeWorker { get; set; } = default!;
+
     private readonly Ganss.Xss.HtmlSanitizer htmlSanitizer = new();
 
     private MessageHeaderDto? selectedHeader;
@@ -148,60 +145,31 @@
 
     private Boolean isLoading;
     private Boolean isLoadingMessage;
-    private Int32 inboxPollSeconds = 30;
 
     private String? statusMessage;
     private Severity statusSeverity = Severity.Info;
+
     protected override async Task OnInitializedAsync()
     {
         PostOffice.Changed += HandlePostOfficeChanged;
-        PostOffice.UndoWindowSeconds = 15;
+        PostOfficeWorker.Changed += HandleWorkerChanged;
+        PostOfficeWorker.NotificationRaised += HandleWorkerNotification;
         await LoadAsync();
-        _ = Task.Run(() => RunPendingQueueAsync(timerCts.Token));
-        _ = Task.Run(() => RunInboxSyncAsync(timerCts.Token));
+        await PostOfficeWorker.StartAsync();
     }
 
     private async Task LoadAsync()
     {
-        await inboxSyncLock.WaitAsync(CancellationToken.None);
         try
         {
             isLoading = true;
             statusMessage = null;
-
-            var loadedHeaders = await MessageApiClient.GetHeadersAsync();
-            var loadedOutgoing = await MailboxConfigApiClient.GetMailboxesByTypeAsync("Outgoing") ?? [];
-            var loadedIncoming = await MailboxConfigApiClient.GetMailboxesByTypeAsync("Incoming") ?? [];
-
-            inboxPollSeconds = ResolveInboxPollIntervalSeconds(loadedIncoming);
-
-            var syncedHeaders = loadedHeaders.Select(ToDto).ToArray();
-            await PostOffice.SyncInboxAsync(syncedHeaders, CancellationToken.None);
-
-            outgoingMailboxes.Clear();
-            outgoingMailboxes.AddRange(loadedOutgoing.Where(x => x.IsActive));
-
-            if (selectedHeader != null)
-            {
-                var stillExists = PostOffice.Inbox.FirstOrDefault(x => x.MessageId == selectedHeader.MessageId);
-                if (stillExists == null)
-                {
-                    selectedHeader = null;
-                    plainTextBody = null;
-                    sanitizedHtmlBody = null;
-                    htmlPreview = default;
-                }
-                else
-                {
-                    selectedHeader = stillExists;
-                }
-            }
-
-            isLoading = false;
+            await PostOfficeWorker.RefreshAsync();
+            SyncSelectedMessageWithProjection();
         }
         finally
         {
-            inboxSyncLock.Release();
+            isLoading = false;
         }
     }
 
@@ -260,147 +228,34 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task RunPendingQueueAsync(CancellationToken cancellationToken)
-    {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
-
-        while (await timer.WaitForNextTickAsync(cancellationToken))
-        {
-            await InvokeAsync(async () =>
-            {
-                var due = PostOffice.GetDueEnvelopes(DateTimeOffset.UtcNow);
-
-                foreach (var pending in due)
-                {
-                    await ExecutePendingAsync(pending);
-                }
-
-                StateHasChanged();
-            });
-        }
-    }
-
-    private async Task RunInboxSyncAsync(CancellationToken cancellationToken)
-    {
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            try
-            {
-                await Task.Delay(TimeSpan.FromSeconds(inboxPollSeconds), cancellationToken);
-                await RefreshInboxProjectionAsync(cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch
-            {
-                statusSeverity = Severity.Error;
-                statusMessage = "Automatic inbox sync failed. Retrying on the next cycle.";
-                await InvokeAsync(StateHasChanged);
-            }
-        }
-    }
-
-    private async Task RefreshInboxProjectionAsync(CancellationToken cancellationToken)
-    {
-        await inboxSyncLock.WaitAsync(cancellationToken);
-        try
-        {
-            var loadedHeaders = await MessageApiClient.GetHeadersAsync();
-            var syncedHeaders = loadedHeaders.Select(ToDto).ToArray();
-
-            await PostOffice.SyncInboxAsync(syncedHeaders, cancellationToken);
-
-            if (selectedHeader != null)
-            {
-                var stillExists = PostOffice.Inbox.FirstOrDefault(x => x.MessageId == selectedHeader.MessageId);
-                if (stillExists == null)
-                {
-                    selectedHeader = null;
-                    plainTextBody = null;
-                    sanitizedHtmlBody = null;
-                    htmlPreview = default;
-                }
-                else
-                {
-                    selectedHeader = stillExists;
-                }
-            }
-        }
-        finally
-        {
-            inboxSyncLock.Release();
-        }
-    }
-
-    private async Task ExecutePendingAsync(PostOffice.PendingEnvelope pending)
-    {
-        Boolean success;
-
-        if (pending.Action == PostOffice.PendingAction.Junk)
-        {
-            success = await MessageApiClient.RouteToJunkAsync(pending.MessageHeader.MessageId);
-        }
-        else
-        {
-            if (pending.Destination == null)
-            {
-                success = false;
-            }
-            else
-            {
-                success = await MessageApiClient.RouteToMailboxAsync(pending.MessageHeader.MessageId, pending.Destination.Value);
-            }
-        }
-
-        if (success)
-        {
-            statusSeverity = Severity.Success;
-            statusMessage = pending.Action == PostOffice.PendingAction.Junk
-                ? "Message moved to junk."
-                : $"Message routed successfully.";
-
-            await PostOffice.MarkCompletedAsync(pending.MessageHeader.MessageId, CancellationToken.None);
-        }
-        else
-        {
-            statusSeverity = Severity.Error;
-            statusMessage = pending.Action == PostOffice.PendingAction.Junk
-                ? "Failed to move message to junk. Message returned to inbox."
-                : "Failed to route message. Message returned to inbox.";
-
-            await PostOffice.ReturnToInboxAsync(pending.MessageHeader.MessageId, CancellationToken.None);
-        }
-    }
-
     private void HandlePostOfficeChanged()
     {
+        SyncSelectedMessageWithProjection();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleWorkerChanged()
+    {
+        SyncSelectedMessageWithProjection();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleWorkerNotification(PostOfficeWorkerNotification notification)
+    {
+        statusSeverity = notification.Level switch
+        {
+            PostOfficeWorkerNotificationLevel.Success => Severity.Success,
+            PostOfficeWorkerNotificationLevel.Error => Severity.Error,
+            _ => Severity.Info,
+        };
+
+        statusMessage = notification.Message;
         _ = InvokeAsync(StateHasChanged);
     }
 
     private String GetMailboxDisplayName(MailboxId? mailboxId)
     {
-        if (mailboxId == null)
-        {
-            return "Unknown mailbox";
-        }
-
-        var mailboxKey = ToInt64FromGuid(mailboxId.Value.Value);
-        return outgoingMailboxes.FirstOrDefault(x => x.Id == mailboxKey)?.DisplayName ?? "Unknown mailbox";
-    }
-
-    private static MessageHeaderDto ToDto(MessageHeader header)
-    {
-        return new MessageHeaderDto
-        {
-            MessageId = header.Id,
-            From = header.From,
-            Subject = header.Subject,
-            DateSent = header.Date,
-            DateReceived = header.Date,
-            To = []
-        };
+        return PostOfficeWorker.GetMailboxDisplayName(mailboxId);
     }
 
     private static String FormatFrom(FullEmail from)
@@ -411,22 +266,6 @@
             : $"{name} <{from.Email.Value}>";
     }
 
-    private static Int32 ResolveInboxPollIntervalSeconds(IEnumerable<MailboxConfigDto> incomingMailboxes)
-    {
-        var configuredIntervals = incomingMailboxes
-            .Where(x => x.IsActive)
-            .Select(x => x.PollIntervalSeconds)
-            .Where(x => x > 0)
-            .ToList();
-
-        if (configuredIntervals.Count == 0)
-        {
-            return 30;
-        }
-
-        return Math.Clamp(configuredIntervals.Min(), 5, 300);
-    }
-
     private static Guid ToGuidFromInt64(Int64 value)
     {
         Span<byte> bytes = stackalloc byte[16];
@@ -434,16 +273,30 @@
         return new Guid(bytes);
     }
 
-    private static Int64 ToInt64FromGuid(Guid value)
+    private void SyncSelectedMessageWithProjection()
     {
-        var bytes = value.ToByteArray();
-        return BitConverter.ToInt64(bytes, 0);
+        if (selectedHeader == null)
+        {
+            return;
+        }
+
+        var stillExists = PostOffice.Inbox.FirstOrDefault(x => x.MessageId == selectedHeader.MessageId);
+        if (stillExists == null)
+        {
+            selectedHeader = null;
+            plainTextBody = null;
+            sanitizedHtmlBody = null;
+            htmlPreview = default;
+            return;
+        }
+
+        selectedHeader = stillExists;
     }
 
     public void Dispose()
     {
         PostOffice.Changed -= HandlePostOfficeChanged;
-        timerCts.Cancel();
-        timerCts.Dispose();
+        PostOfficeWorker.Changed -= HandleWorkerChanged;
+        PostOfficeWorker.NotificationRaised -= HandleWorkerNotification;
     }
 }

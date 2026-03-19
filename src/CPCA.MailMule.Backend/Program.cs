@@ -120,7 +120,11 @@ public static class Program
             options.TokenValidationParameters.NameClaimType = "name";
         });
 
-        builder.Services.AddAuthorization();
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddPolicy("Admin", policy => policy.RequireRole("Admin"));
+            options.AddPolicy("Operator", policy => policy.RequireRole("Operator", "Admin"));
+        });
 
         var frontendBaseUrl = builder.Configuration["Frontend:BaseUrl"]
             ?? throw new InvalidOperationException("Frontend:BaseUrl is not configured.");
@@ -173,7 +177,7 @@ public static class Program
         app.MapForwarder("/api/{**catch-all}", $"https://{MailMuleEndpoints.ImapService}",
             new ForwarderRequestConfig(),
             new JwtInjectingTransformer())
-            .RequireAuthorization();
+            .RequireAuthorization("Operator");
 
         // -----------------------------
         // Login / Logout
@@ -199,7 +203,7 @@ public static class Program
             var name = ctx.User.Identity?.Name ?? "Unknown";
             return Results.Ok(new { message = $"Hello {name}, you are authenticated." });
         })
-        .RequireAuthorization();
+        .RequireAuthorization("Operator");
 
         app.MapGet("/bff/user", (HttpContext ctx) =>
         {
@@ -243,7 +247,7 @@ public static class Program
             var mailboxes = await service.GetMailboxesByTypeAsync("Incoming", ct);
             return Results.Ok(mailboxes);
         })
-        .RequireAuthorization()
+        .RequireAuthorization("Admin")
         .WithName("ListIncomingMailboxes")
         .Produces<IEnumerable<MailboxConfigDto>>();
 
@@ -261,7 +265,7 @@ public static class Program
 
             return Results.Created($"/admin/incoming/{id}", id);
         })
-        .RequireAuthorization()
+        .RequireAuthorization("Admin")
         .WithName("CreateIncomingMailbox")
         .Produces<Int64>(StatusCodes.Status201Created)
         .Produces(StatusCodes.Status400BadRequest)
@@ -273,7 +277,7 @@ public static class Program
             var mailbox = await service.GetMailboxAsync(id, ct);
             return mailbox == null ? Results.NotFound() : Results.Ok(mailbox);
         })
-        .RequireAuthorization()
+        .RequireAuthorization("Admin")
         .WithName("GetIncomingMailbox")
         .Produces<MailboxConfigDto>()
         .Produces(StatusCodes.Status404NotFound);
@@ -315,7 +319,7 @@ public static class Program
                 return Results.NotFound();
             }
         })
-        .RequireAuthorization()
+        .RequireAuthorization("Admin")
         .WithName("UpdateIncomingMailbox")
         .Produces(StatusCodes.Status204NoContent)
         .Produces(StatusCodes.Status400BadRequest)
@@ -343,7 +347,7 @@ public static class Program
                 return Results.NotFound();
             }
         })
-        .RequireAuthorization()
+        .RequireAuthorization("Admin")
         .WithName("DeleteIncomingMailbox")
         .Produces(StatusCodes.Status204NoContent)
         .Produces(StatusCodes.Status404NotFound);
@@ -354,7 +358,7 @@ public static class Program
             var result = await service.TestConnectionAsync(request, ct);
             return Results.Ok(result);
         })
-        .RequireAuthorization()
+        .RequireAuthorization("Admin")
         .WithName("TestIncomingConnection")
         .Produces<MailboxConnectionTestResult>();
 
@@ -364,7 +368,7 @@ public static class Program
             var mailboxes = await service.GetMailboxesByTypeAsync("Outgoing", ct);
             return Results.Ok(mailboxes);
         })
-        .RequireAuthorization()
+        .RequireAuthorization("Admin")
         .WithName("ListOutgoingMailboxes")
         .Produces<IEnumerable<MailboxConfigDto>>();
 
@@ -382,7 +386,7 @@ public static class Program
 
             return Results.Created($"/admin/outgoing/{id}", id);
         })
-        .RequireAuthorization()
+        .RequireAuthorization("Admin")
         .WithName("CreateOutgoingMailbox")
         .Produces<Int64>(StatusCodes.Status201Created)
         .Produces(StatusCodes.Status400BadRequest)
@@ -394,7 +398,7 @@ public static class Program
             var mailbox = await service.GetMailboxAsync(id, ct);
             return mailbox == null ? Results.NotFound() : Results.Ok(mailbox);
         })
-        .RequireAuthorization()
+        .RequireAuthorization("Admin")
         .WithName("GetOutgoingMailbox")
         .Produces<MailboxConfigDto>()
         .Produces(StatusCodes.Status404NotFound);
@@ -436,7 +440,7 @@ public static class Program
                 return Results.NotFound();
             }
         })
-        .RequireAuthorization()
+        .RequireAuthorization("Admin")
         .WithName("UpdateOutgoingMailbox")
         .Produces(StatusCodes.Status204NoContent)
         .Produces(StatusCodes.Status400BadRequest)
@@ -464,7 +468,7 @@ public static class Program
                 return Results.NotFound();
             }
         })
-        .RequireAuthorization()
+        .RequireAuthorization("Admin")
         .WithName("DeleteOutgoingMailbox")
         .Produces(StatusCodes.Status204NoContent)
         .Produces(StatusCodes.Status404NotFound);
@@ -475,9 +479,37 @@ public static class Program
             var result = await service.TestConnectionAsync(request, ct);
             return Results.Ok(result);
         })
-        .RequireAuthorization()
+        .RequireAuthorization("Admin")
         .WithName("TestOutgoingConnection")
         .Produces<MailboxConnectionTestResult>();
+
+        // GET /admin/settings - Get user settings
+        app.MapGet("/admin/settings", async (IUserSettingsService service, CancellationToken ct) =>
+        {
+            var settings = await service.GetAsync(ct);
+            return Results.Ok(settings);
+        })
+        .RequireAuthorization("Admin")
+        .WithName("GetUserSettings")
+        .Produces<UserSettingsDto>();
+
+        // PUT /admin/settings - Update user settings
+        app.MapPut("/admin/settings", async (UserSettingsDto dto, IUserSettingsService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
+        {
+            await service.UpdateAsync(dto, ct);
+
+            logger.LogInformation(
+                "User settings updated by {User}: UndoWindowSeconds={UndoWindowSeconds}, PageSize={PageSize}",
+                GetCurrentUserName(context),
+                dto.UndoWindowSeconds,
+                dto.PageSize);
+
+            return Results.NoContent();
+        })
+        .RequireAuthorization("Admin")
+        .WithName("UpdateUserSettings")
+        .Produces(StatusCodes.Status204NoContent);
+
         // -----------------------------
         await app.RunAsync();
     }

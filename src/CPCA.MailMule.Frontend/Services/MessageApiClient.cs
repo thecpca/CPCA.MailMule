@@ -2,7 +2,7 @@ using System.Net.Http.Json;
 
 namespace CPCA.MailMule.Frontend.Services;
 
-public sealed class MessageApiClient(HttpClient httpClient)
+public sealed class MessageApiClient(HttpClient httpClient) : IMessageApiClient
 {
     public async Task<IReadOnlyList<MessageHeader>> GetHeadersAsync(CancellationToken cancellationToken = default)
     {

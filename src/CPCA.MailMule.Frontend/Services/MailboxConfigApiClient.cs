@@ -3,7 +3,7 @@ using CPCA.MailMule.Dtos;
 
 namespace CPCA.MailMule.Frontend.Services;
 
-public sealed class MailboxConfigApiClient
+public sealed class MailboxConfigApiClient : IMailboxConfigApiClient
 {
     private readonly HttpClient httpClient;
 

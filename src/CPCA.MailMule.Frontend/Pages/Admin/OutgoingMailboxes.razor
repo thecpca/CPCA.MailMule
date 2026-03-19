@@ -3,7 +3,7 @@
 @page "/admin/outgoing"
 @using CPCA.MailMule.Dtos
 @using CPCA.MailMule.Frontend.Services
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Admin")]
 
 <PageTitle>Outgoing Mailbox Configuration</PageTitle>
 

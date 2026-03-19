@@ -1,13 +1,16 @@
 <MudNavMenu>
     <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
-    <MudNavLink Href="message/router" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.ForwardToInbox">Message Router</MudNavLink>
-    <MudNavLink Href="counter" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Add">Counter</MudNavLink>
-    <MudNavLink Href="weather" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.List">Weather</MudNavLink>
+    <AuthorizeView Roles="Operator,Admin">
+        <MudNavLink Href="message/router" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.ForwardToInbox">Message Router</MudNavLink>
+    </AuthorizeView>
     
     <MudDivider Class="my-2" />
     
-    <MudNavGroup Title="Admin" Icon="@Icons.Material.Filled.Settings" Expanded="false">
-        <MudNavLink Href="admin/incoming" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Mail">Incoming Mailboxes</MudNavLink>
-        <MudNavLink Href="admin/outgoing" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.MailOutline">Outgoing Mailboxes</MudNavLink>
-    </MudNavGroup>
+    <AuthorizeView Roles="Admin">
+        <MudNavGroup Title="Admin" Icon="@Icons.Material.Filled.Settings" Expanded="false">
+            <MudNavLink Href="admin/incoming" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Mail">Incoming Mailboxes</MudNavLink>
+            <MudNavLink Href="admin/outgoing" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.MailOutline">Outgoing Mailboxes</MudNavLink>
+            <MudNavLink Href="admin/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Tune">Settings</MudNavLink>
+        </MudNavGroup>
+    </AuthorizeView>
 </MudNavMenu>

@@ -101,7 +101,7 @@ public partial class Program
             app.MapOpenApi();
         }
 
-        app.MapGet("/", () => "API service is running. Navigate to /GetWeatherForecast to see sample data.");
+        app.MapGet("/", () => "MailMule IMAP service is running.");
 
         app.MapHealthChecks("/health/live", new HealthCheckOptions
         {

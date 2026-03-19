@@ -34,6 +34,8 @@ In no particular order:
 - Use `[LoggerMessage]` attributes to improve logging consistency and performance
 - Use TwoRivers Rhuarc.EntityFrameworkCore for applying EF Core migrations at runtime
 - Use Mapperly for mapping Entities to DTO's
+- Switch to FluentAssertions for Unit and Integration testing
+- Switch to TwoRivers Rhuarc.Testing integration testing framework
 
 ## Application Insights
 

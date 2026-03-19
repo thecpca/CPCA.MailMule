@@ -51,7 +51,12 @@ public static class Program
         // Register API clients
         builder.Services.AddScoped<MailboxConfigApiClient>();
         builder.Services.AddScoped<MessageApiClient>();
+        builder.Services.AddScoped<IMailboxConfigApiClient>(sp => sp.GetRequiredService<MailboxConfigApiClient>());
+        builder.Services.AddScoped<IMessageApiClient>(sp => sp.GetRequiredService<MessageApiClient>());
+        builder.Services.AddScoped<UserSettingsApiClient>();
+        builder.Services.AddScoped<IUserSettingsApiClient>(sp => sp.GetRequiredService<UserSettingsApiClient>());
         builder.Services.AddScoped<PostOffice>();
+        builder.Services.AddScoped<PostOfficeWorker>();
 
 
         var app = builder.Build();

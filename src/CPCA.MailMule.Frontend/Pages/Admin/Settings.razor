@@ -1,0 +1,117 @@
+@using MudBlazor
+@using Microsoft.AspNetCore.Authorization
+@page "/admin/settings"
+@using CPCA.MailMule.Dtos
+@using CPCA.MailMule.Frontend.Services
+@attribute [Authorize(Roles = "Admin")]
+@inject IUserSettingsApiClient SettingsApiClient
+@inject ISnackbar Snackbar
+
+<PageTitle>Settings</PageTitle>
+
+<MudStack Spacing="3">
+    <MudText Typo="Typo.h4">Settings</MudText>
+
+    @if (loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (settings != null)
+    {
+        <MudPaper Class="pa-4" MaxWidth="600px">
+            <MudText Typo="Typo.h6" Class="mb-4">User Settings</MudText>
+
+            <MudStack Spacing="3">
+                <MudNumericField @bind-Value="settings.UndoWindowSeconds"
+                    Label="Undo Window (seconds)"
+                    HelperText="Time before a queued message is automatically sent (5–60)"
+                    Min="5" Max="60"
+                    Variant="Variant.Outlined" />
+
+                <MudNumericField @bind-Value="settings.PageSize"
+                    Label="Page Size"
+                    HelperText="Number of messages per page (10–100)"
+                    Min="10" Max="100"
+                    Variant="Variant.Outlined" />
+
+                <MudStack Row="true" Spacing="2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                        OnClick="@SaveAsync" Disabled="@saving">
+                        @if (saving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        }
+                        Save
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        </MudPaper>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Error">Failed to load settings.</MudAlert>
+    }
+</MudStack>
+
+@code {
+    private SettingsModel? settings;
+    private Boolean loading = true;
+    private Boolean saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettingsAsync();
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        loading = true;
+        try
+        {
+            var dto = await SettingsApiClient.GetAsync();
+            if (dto != null)
+            {
+                settings = new SettingsModel
+                {
+                    UndoWindowSeconds = dto.UndoWindowSeconds,
+                    PageSize = dto.PageSize
+                };
+            }
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (settings == null) return;
+
+        saving = true;
+        try
+        {
+            var dto = new UserSettingsDto(settings.UndoWindowSeconds, settings.PageSize);
+            var success = await SettingsApiClient.UpdateAsync(dto);
+
+            if (success)
+            {
+                Snackbar.Add("Settings saved.", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to save settings.", Severity.Error);
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private sealed class SettingsModel
+    {
+        public Int32 UndoWindowSeconds { get; set; }
+        public Int32 PageSize { get; set; }
+    }
+}

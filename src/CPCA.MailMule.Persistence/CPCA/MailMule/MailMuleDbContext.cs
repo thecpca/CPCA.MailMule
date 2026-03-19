@@ -6,6 +6,8 @@ public sealed class MailMuleDbContext(DbContextOptions<MailMuleDbContext> option
 {
     public DbSet<MailboxConfig> MailboxConfigs => Set<MailboxConfig>();
 
+    public DbSet<IncomingMessage> IncomingMessages => Set<IncomingMessage>();
+
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
 
     public DbSet<ApplicationSettings> ApplicationSettings => Set<ApplicationSettings>();
@@ -105,6 +107,41 @@ public sealed class MailMuleDbContext(DbContextOptions<MailMuleDbContext> option
                 Id = 1,
                 InactivityTimeoutMinutes = 30
             });
+        });
+
+        modelBuilder.Entity<IncomingMessage>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.MailboxConfigId)
+                .IsRequired();
+
+            entity.Property(x => x.Uid)
+                .IsRequired();
+
+            entity.Property(x => x.UidValidity)
+                .IsRequired();
+
+            entity.Property(x => x.State)
+                .HasConversion<Int32>()
+                .IsRequired();
+
+            entity.Property(x => x.DiscoveredUtc)
+                .IsRequired();
+
+            entity.Property(x => x.LastSeenUtc)
+                .IsRequired();
+
+            entity.Property(x => x.ErrorCode)
+                .HasMaxLength(100);
+
+            entity.Property(x => x.ErrorDetail)
+                .HasMaxLength(1000);
+
+            entity.HasIndex(x => new { x.MailboxConfigId, x.Uid })
+                .IsUnique();
+
+            entity.HasIndex(x => new { x.MailboxConfigId, x.State });
         });
 
         base.OnModelCreating(modelBuilder);

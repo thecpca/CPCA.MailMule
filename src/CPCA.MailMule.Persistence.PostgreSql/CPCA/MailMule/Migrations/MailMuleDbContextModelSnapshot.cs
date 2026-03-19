@@ -42,6 +42,59 @@ namespace CPCA.MailMule.Migrations
                         });
                 });
 
+            modelBuilder.Entity("CPCA.MailMule.IncomingMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("DiscoveredUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("DestinationMailboxConfigId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ErrorDetail")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset?>("ErrorUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("LastSeenUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("MailboxConfigId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset?>("StateChangedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("State")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Uid")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("UidValidity")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MailboxConfigId", "State");
+
+                    b.HasIndex("MailboxConfigId", "Uid")
+                        .IsUnique();
+
+                    b.ToTable("IncomingMessages");
+                });
+
             modelBuilder.Entity("CPCA.MailMule.MailboxConfig", b =>
                 {
                     b.Property<long>("Id")

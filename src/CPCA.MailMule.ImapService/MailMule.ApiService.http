@@ -1,6 +1,6 @@
 @ApiService_HostAddress = http://localhost:6001
 
-GET {{ApiService_HostAddress}}/Weather/
+GET {{ApiService_HostAddress}}/api/messages
 Accept: application/json
 
 ###

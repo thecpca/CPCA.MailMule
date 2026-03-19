@@ -94,6 +94,12 @@ IMPORTANT: No operations are executed against the IMAP folders by the server unt
 - CPCA.MailMule.ImapService: Manages IMAP connections and performs message routing operations.
 - SignalR support is optional in current scope (primarily for new-message notifications).
 
+### Concrete Decision Rule
+
+- If it depends on OIDC, cookies, roles, browser requests, or UI/admin policy, put it in Backend.
+- If it depends on IMAP, message UIDs, UIDVALIDITY, folder sync, route/junk execution, or mailbox health, put it in ImapService.
+- If it is purely session UX state and should vanish when the browser closes, keep it in Frontend.
+
 ---
 
 ## v2 Technology Stack
@@ -121,7 +127,6 @@ MailMule.slnx
 │   ├── CPCA.MailMule.Core                   — Shared cross-cutting primitives and abstractions
 │   ├── CPCA.MailMule.Domain                 — Domain models
 │   ├── CPCA.MailMule.Domain.Shared          — Value objects and enums
-
 │   ├── CPCA.MailMule.Persistence            — EF Core DbContext and persistence implementation
 │   ├── CPCA.MailMule.Persistence.PostgreSql — Npgsql DbContext factory, PostgreSQL migrations, provider wiring
 │   ├── CPCA.MailMule.Backend                — BFF auth, authorization, proxy and configuration API
@@ -182,13 +187,18 @@ Scaffold the solution and all projects so that the build is green before any imp
 
 ---
 
-## ✅ Phase 2 — Configuration & Admin Backbone
+## [~] Phase 2 — Configuration & Admin Backbone
 
 ### Goal
 
 Define the full configuration model for mailboxes, destinations, and operational settings, then build the
 admin UI. Configuration is implemented before the IMAP layer so that IMAP services can be driven by real data
 from day one.
+
+Current status:
+- Mailbox configuration persistence, CRUD APIs, and `/admin/incoming` + `/admin/outgoing` pages are implemented.
+- Connection testing is implemented.
+- `ApplicationSettings` and `UserSettings` persistence exists, but `/admin/settings` is not implemented yet.
 
 ### Data Model (persisted through EF Core)
 
@@ -233,11 +243,16 @@ from day one.
 
 ---
 
-## ✅ Phase 3 — IMAP Abstraction Layer
+## [~] Phase 3 — IMAP Abstraction Layer
 
 ### Goal
 
 Encapsulate all IMAP operations so that safety rules are enforced by the type system, not by convention.
+
+Current status:
+- `IMailboxService`, `IImapConnectionTester`, and `IStringProtector` are implemented.
+- Core MailKit routing and retrieval operations exist with structured logging.
+- `IImapClientFactory`, `IOutgoingMailboxService`, and pooled/persisted IMAP client abstractions are not implemented.
 
 ### Interfaces (in `CPCA.MailMule.Application.Contracts`)
 
@@ -285,11 +300,16 @@ public interface IStringProtector
 
 ---
 
-## [_] Phase 4 — ImapService
+## [~] Phase 4 — ImapService
 
-###oal
+### Goal
 
 Manage IMAP connections, handle commands and queries for IMAP Mailboxes.
+
+Current status:
+- `CPCA.MailMule.ImapService` exists and exposes authenticated message query and routing endpoints.
+- Backend-to-ImapService JWT authentication is wired.
+- The operational error-state model described below is not implemented as a service-side workflow.
 
 ### Post Office
 
@@ -313,11 +333,16 @@ Error     → New       Admin re-queues the message for retry
 
 ---
 
-## ✅ Phase 5 — Incoming Sync Worker
+## [~] Phase 5 — Incoming Sync Worker
 
 ### Goal
 
 Keep the "PostOffice" in-memory projection in sync with the real-time contents of the incoming IMAP folders.
+
+Current status:
+- The Frontend has an in-memory `PostOffice` and periodically refreshes message headers from the API.
+- There is no hosted background worker in Backend or ImapService implementing the mailbox sync algorithm below.
+- `UIDVALIDITY` handling and `IncomingMessage` operational state are not implemented.
 
 ### Algorithm
 
@@ -337,11 +362,16 @@ Keep the "PostOffice" in-memory projection in sync with the real-time contents o
 
 ---
 
-## ✅ Phase 6 — Routing and Junk Workflows
+## [~] Phase 6 — Routing and Junk Workflows
 
 ### Goal
 
 Implement the two key operator-triggered workflows with strict, deterministic failure handling.
+
+Current status:
+- Junk and route actions are implemented end-to-end through the Frontend queue and ImapService endpoints.
+- Undo timing exists in the Frontend `PostOffice`.
+- The explicit persisted/in-memory state machine (`New`, `Routing`, `Routed`, `Error`, `Junk`) and partial-failure requeue handling are not implemented as described below.
 
 ### Routing Workflow (`RouteMessageAsync`)
 
@@ -393,11 +423,16 @@ The undo window is managed in the **web application layer**, not the routing ser
 
 ---
 
-## ✅ Phase 7 — Operator Web UI
+## [~] Phase 7 — Operator Web UI
 
 ### Goal
 
 A clean, fast email-client-like interface. The operator should feel at home immediately.
+
+Current status:
+- The message router page, mailbox actions, HTML sanitization, and incoming/outgoing admin pages exist.
+- The UI is functional but does not fully match the target layout and scope described below.
+- `/admin/settings` is still missing.
 
 ### Layout
 
@@ -425,11 +460,16 @@ A clean, fast email-client-like interface. The operator should feel at home imme
 
 ---
 
-## ✅ Phase 8 — Authentication & Authorization
+## [~] Phase 8 — Authentication & Authorization
 
 ### Goal
 
 Authenticate the user when a page is marked with the [[Authorize]] attribute.
+
+Current status:
+- OIDC sign-in, BFF session cookies, `/bff/user`, and Backend-issued JWTs for ImapService are implemented.
+- Pages and endpoints require authentication.
+- Role/policy enforcement for distinct `Operator` and `Admin` access is not fully implemented.
 
 ### Design
 
@@ -447,7 +487,7 @@ Replacing the auth provider in future requires:
 
 ---
 
-## [ ] Phase 9 — Reliability, Observability & Testing
+## [~] Phase 9 — Reliability, Observability & Testing
 
 ### Health Checks
 
@@ -477,6 +517,13 @@ Configured in `MailMule.ImapService`, `MailMule.Backend`, and `MailMule.Frontend
 ### Integration Tests
 
 See: [END_TO_END_TEST_PLAN.md](END_TO_END_TEST_PLAN.md)
+
+Current status:
+- Backend database and ImapService mailbox readiness checks are implemented along with `/health/live` and `/health/ready` endpoints.
+- Correlation ID middleware and propagation are implemented in Backend and ImapService.
+- Structured logs for routing, junk, and admin mailbox changes are implemented.
+- Web test coverage exists for the health endpoints and correlation headers.
+- Error queue, poll-cycle worker logging, and broader integration coverage are still outstanding.
 
 ---
 
