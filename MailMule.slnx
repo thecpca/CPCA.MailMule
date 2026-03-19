@@ -26,8 +26,6 @@
     <Project Path="src/CPCA.MailMule.Persistence.PostgreSql/CPCA.MailMule.Persistence.PostgreSql.csproj" />
     <Project Path="src/CPCA.MailMule.Persistence/CPCA.MailMule.Persistence.csproj" />
     <Project Path="src/CPCA.MailMule.Shared/CPCA.MailMule.Shared.csproj" />
-    <Project Path="src/CPCA.MailMule.WebApi.Client/CPCA.MailMule.WebApi.Client.csproj" />
-    <Project Path="src/CPCA.MailMule.WebApi/CPCA.MailMule.WebApi.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/CPCA.MailMule.Tests/CPCA.MailMule.Tests.csproj" />
