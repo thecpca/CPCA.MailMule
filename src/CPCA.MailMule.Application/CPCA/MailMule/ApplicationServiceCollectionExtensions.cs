@@ -12,6 +12,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<MailboxConfigRepository>();
 
         // Register application services
+        services.AddScoped<IImapConnectionTester, MailKitConnectionTester>();
+        services.AddScoped<IMailboxService, MailKitMailboxService>();
         services.AddScoped<IMailboxConfigService, MailboxConfigService>();
 
         return services;

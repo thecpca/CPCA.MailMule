@@ -49,6 +49,7 @@ public partial class Program
             ?? throw new InvalidOperationException("Connection string 'MailMule' is not configured.");
 
         builder.Services.AddMailMule(options => options.UsePostgreSql(connstring));
+        builder.Services.AddMailMuleApplication();
 
         builder.Services.AddControllers();
 

@@ -8,15 +8,18 @@ internal sealed class MailboxConfigService : IMailboxConfigService
 {
     private readonly MailboxConfigRepository repository;
     private readonly IStringProtector stringProtector;
+    private readonly IImapConnectionTester imapConnectionTester;
     private readonly ILogger<MailboxConfigService> logger;
 
     public MailboxConfigService(
         MailboxConfigRepository repository,
         IStringProtector stringProtector,
+        IImapConnectionTester imapConnectionTester,
         ILogger<MailboxConfigService> logger)
     {
         this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
         this.stringProtector = stringProtector ?? throw new ArgumentNullException(nameof(stringProtector));
+        this.imapConnectionTester = imapConnectionTester ?? throw new ArgumentNullException(nameof(imapConnectionTester));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -131,40 +134,27 @@ internal sealed class MailboxConfigService : IMailboxConfigService
 
         this.logger.LogInformation("Testing connection to {ImapHost}:{ImapPort}", request.ImapHost, request.ImapPort);
 
-        try
+        if (String.IsNullOrWhiteSpace(request.ImapHost))
         {
-            // Placeholder for actual IMAP connection test
-            // In Phase 3, this will use the IMailboxService abstraction with MailKit
-            // For now, just validate the basic parameters
-            if (String.IsNullOrWhiteSpace(request.ImapHost))
-            {
-                return new MailboxConnectionTestResult(false, "IMAP host is required", null);
-            }
-
-            if (request.ImapPort <= 0 || request.ImapPort > 65535)
-            {
-                return new MailboxConnectionTestResult(false, "IMAP port must be between 1 and 65535", null);
-            }
-
-            if (String.IsNullOrWhiteSpace(request.Username))
-            {
-                return new MailboxConnectionTestResult(false, "Username is required", null);
-            }
-
-            if (String.IsNullOrWhiteSpace(request.Password))
-            {
-                return new MailboxConnectionTestResult(false, "Password is required", null);
-            }
-
-            // TODO: In Phase 3, implement actual IMAP connection test using MailKit
-            this.logger.LogInformation("Connection test parameters validated for {ImapHost}", request.ImapHost);
-            return new MailboxConnectionTestResult(true, "Connection test placeholder (actual test in Phase 3)", new[] { "INBOX" });
+            return new MailboxConnectionTestResult(false, "IMAP host is required", null);
         }
-        catch (Exception ex)
+
+        if (request.ImapPort <= 0 || request.ImapPort > 65535)
         {
-            this.logger.LogError(ex, "Connection test failed for {ImapHost}", request.ImapHost);
-            return new MailboxConnectionTestResult(false, $"Connection test failed: {ex.Message}", null);
+            return new MailboxConnectionTestResult(false, "IMAP port must be between 1 and 65535", null);
         }
+
+        if (String.IsNullOrWhiteSpace(request.Username))
+        {
+            return new MailboxConnectionTestResult(false, "Username is required", null);
+        }
+
+        if (String.IsNullOrWhiteSpace(request.Password))
+        {
+            return new MailboxConnectionTestResult(false, "Password is required", null);
+        }
+
+        return await this.imapConnectionTester.TestConnectionAsync(request, cancellationToken);
     }
 
     private MailboxConfigDto MapToDto(MailboxConfig mailbox)
