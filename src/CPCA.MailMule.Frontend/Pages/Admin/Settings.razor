@@ -5,6 +5,7 @@
 @using CPCA.MailMule.Frontend.Services
 @attribute [Authorize(Roles = "Admin")]
 @inject IUserSettingsApiClient SettingsApiClient
+@inject IApplicationSettingsApiClient AppSettingsApiClient
 @inject ISnackbar Snackbar
 
 <PageTitle>Settings</PageTitle>
@@ -16,36 +17,48 @@
     {
         <MudProgressCircular Indeterminate="true" />
     }
-    else if (settings != null)
+    else if (userSettings != null && appSettings != null)
     {
         <MudPaper Class="pa-4" MaxWidth="600px">
             <MudText Typo="Typo.h6" Class="mb-4">User Settings</MudText>
 
             <MudStack Spacing="3">
-                <MudNumericField @bind-Value="settings.UndoWindowSeconds"
+                <MudNumericField @bind-Value="userSettings.UndoWindowSeconds"
                     Label="Undo Window (seconds)"
                     HelperText="Time before a queued message is automatically sent (5–60)"
                     Min="5" Max="60"
                     Variant="Variant.Outlined" />
 
-                <MudNumericField @bind-Value="settings.PageSize"
+                <MudNumericField @bind-Value="userSettings.PageSize"
                     Label="Page Size"
                     HelperText="Number of messages per page (10–100)"
                     Min="10" Max="100"
                     Variant="Variant.Outlined" />
-
-                <MudStack Row="true" Spacing="2">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                        OnClick="@SaveAsync" Disabled="@saving">
-                        @if (saving)
-                        {
-                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                        }
-                        Save
-                    </MudButton>
-                </MudStack>
             </MudStack>
         </MudPaper>
+
+        <MudPaper Class="pa-4" MaxWidth="600px">
+            <MudText Typo="Typo.h6" Class="mb-4">Application Settings</MudText>
+
+            <MudStack Spacing="3">
+                <MudNumericField @bind-Value="appSettings.InactivityTimeoutMinutes"
+                    Label="Inactivity Timeout (minutes)"
+                    HelperText="Auto-logout after inactivity (5–120)"
+                    Min="5" Max="120"
+                    Variant="Variant.Outlined" />
+            </MudStack>
+        </MudPaper>
+
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                OnClick="@SaveAsync" Disabled="@saving">
+                @if (saving)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Save
+            </MudButton>
+        </MudStack>
     }
     else
     {
@@ -54,7 +67,8 @@
 </MudStack>
 
 @code {
-    private SettingsModel? settings;
+    private UserSettingsModel? userSettings;
+    private AppSettingsModel? appSettings;
     private Boolean loading = true;
     private Boolean saving;
 
@@ -68,13 +82,23 @@
         loading = true;
         try
         {
-            var dto = await SettingsApiClient.GetAsync();
-            if (dto != null)
+            var userDto = await SettingsApiClient.GetAsync();
+            var appDto = await AppSettingsApiClient.GetAsync();
+
+            if (userDto != null)
             {
-                settings = new SettingsModel
+                userSettings = new UserSettingsModel
                 {
-                    UndoWindowSeconds = dto.UndoWindowSeconds,
-                    PageSize = dto.PageSize
+                    UndoWindowSeconds = userDto.UndoWindowSeconds,
+                    PageSize = userDto.PageSize
+                };
+            }
+
+            if (appDto != null)
+            {
+                appSettings = new AppSettingsModel
+                {
+                    InactivityTimeoutMinutes = appDto.InactivityTimeoutMinutes
                 };
             }
         }
@@ -86,21 +110,24 @@
 
     private async Task SaveAsync()
     {
-        if (settings == null) return;
+        if (userSettings == null || appSettings == null) return;
 
         saving = true;
         try
         {
-            var dto = new UserSettingsDto(settings.UndoWindowSeconds, settings.PageSize);
-            var success = await SettingsApiClient.UpdateAsync(dto);
+            var userDto = new UserSettingsDto(userSettings.UndoWindowSeconds, userSettings.PageSize);
+            var appDto = new ApplicationSettingsDto(appSettings.InactivityTimeoutMinutes);
 
-            if (success)
+            var userSuccess = await SettingsApiClient.UpdateAsync(userDto);
+            var appSuccess = await AppSettingsApiClient.UpdateAsync(appDto);
+
+            if (userSuccess && appSuccess)
             {
                 Snackbar.Add("Settings saved.", Severity.Success);
             }
             else
             {
-                Snackbar.Add("Failed to save settings.", Severity.Error);
+                Snackbar.Add("Failed to save one or more settings.", Severity.Error);
             }
         }
         finally
@@ -109,9 +136,14 @@
         }
     }
 
-    private sealed class SettingsModel
+    private sealed class UserSettingsModel
     {
         public Int32 UndoWindowSeconds { get; set; }
         public Int32 PageSize { get; set; }
+    }
+
+    private sealed class AppSettingsModel
+    {
+        public Int32 InactivityTimeoutMinutes { get; set; }
     }
 }

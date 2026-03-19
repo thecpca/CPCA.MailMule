@@ -14,9 +14,12 @@ public static class ApplicationServiceCollectionExtensions
 
         // Register application services
         services.AddScoped<IImapConnectionTester, MailKitConnectionTester>();
+        services.AddScoped<IImapClientFactory, MailKitImapClientFactory>();
         services.AddScoped<IMailboxService, MailKitMailboxService>();
         services.AddScoped<IMailboxConfigService, MailboxConfigService>();
         services.AddScoped<IUserSettingsService, UserSettingsService>();
+        services.AddScoped<IApplicationSettingsService, ApplicationSettingsService>();
+        services.AddScoped<IIncomingMessageService, IncomingMessageService>();
 
         return services;
     }

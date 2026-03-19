@@ -510,6 +510,76 @@ public static class Program
         .WithName("UpdateUserSettings")
         .Produces(StatusCodes.Status204NoContent);
 
+        // GET /admin/app-settings - Get application settings
+        app.MapGet("/admin/app-settings", async (IApplicationSettingsService service, CancellationToken ct) =>
+        {
+            var settings = await service.GetAsync(ct);
+            return Results.Ok(settings);
+        })
+        .RequireAuthorization("Admin")
+        .WithName("GetApplicationSettings")
+        .Produces<ApplicationSettingsDto>();
+
+        // PUT /admin/app-settings - Update application settings
+        app.MapPut("/admin/app-settings", async (ApplicationSettingsDto dto, IApplicationSettingsService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
+        {
+            await service.UpdateAsync(dto, ct);
+
+            logger.LogInformation(
+                "Application settings updated by {User}: InactivityTimeoutMinutes={InactivityTimeoutMinutes}",
+                GetCurrentUserName(context),
+                dto.InactivityTimeoutMinutes);
+
+            return Results.NoContent();
+        })
+        .RequireAuthorization("Admin")
+        .WithName("UpdateApplicationSettings")
+        .Produces(StatusCodes.Status204NoContent);
+
+        // GET /admin/errors - List incoming messages in Error state
+        app.MapGet("/admin/errors", async (IIncomingMessageService service, CancellationToken ct) =>
+        {
+            var errors = await service.GetErrorMessagesAsync(ct);
+            return Results.Ok(errors);
+        })
+        .RequireAuthorization("Admin")
+        .WithName("ListErrorMessages")
+        .Produces<IEnumerable<IncomingMessageDto>>();
+
+        // POST /admin/errors/{id}/requeue - Requeue an error message
+        app.MapPost("/admin/errors/{id}/requeue", async (Int64 id, IIncomingMessageService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
+        {
+            await service.RequeueAsync(id, ct);
+
+            logger.LogInformation(
+                "Error message {MessageId} requeued by {User}",
+                id,
+                GetCurrentUserName(context));
+
+            return Results.NoContent();
+        })
+        .RequireAuthorization("Admin")
+        .WithName("RequeueErrorMessage")
+        .Produces(StatusCodes.Status204NoContent)
+        .Produces(StatusCodes.Status404NotFound);
+
+        // POST /admin/errors/{id}/dismiss - Dismiss an error message
+        app.MapPost("/admin/errors/{id}/dismiss", async (Int64 id, IIncomingMessageService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
+        {
+            await service.DismissAsync(id, ct);
+
+            logger.LogInformation(
+                "Error message {MessageId} dismissed by {User}",
+                id,
+                GetCurrentUserName(context));
+
+            return Results.NoContent();
+        })
+        .RequireAuthorization("Admin")
+        .WithName("DismissErrorMessage")
+        .Produces(StatusCodes.Status204NoContent)
+        .Produces(StatusCodes.Status404NotFound);
+
         // -----------------------------
         await app.RunAsync();
     }

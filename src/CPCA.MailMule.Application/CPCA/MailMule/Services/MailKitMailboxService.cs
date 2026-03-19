@@ -4,14 +4,13 @@ using CPCA.MailMule.Repositories;
 using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Search;
-using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using MimeKit;
 using System.Diagnostics;
 
 internal sealed class MailKitMailboxService(
     MailboxConfigRepository mailboxConfigRepository,
-    IStringProtector stringProtector,
+    IImapClientFactory imapClientFactory,
     ILogger<MailKitMailboxService> logger) : IMailboxService
 {
     private const Int32 MaxHeadersPerMailbox = 100;
@@ -58,7 +57,7 @@ internal sealed class MailKitMailboxService(
             {
                 var mailbox = await this.GetIncomingMailboxByMessageIdAsync(messageId, cancellationToken);
 
-                using var client = await ConnectAsync(mailbox, cancellationToken);
+                using var client = await imapClientFactory.CreateConnectedClientAsync(mailbox, cancellationToken);
                 var sourceFolder = await OpenSourceFolderAsync(client, mailbox, FolderAccess.ReadOnly, cancellationToken);
 
                 var uniqueId = new UniqueId(messageId.Uid);
@@ -81,7 +80,7 @@ internal sealed class MailKitMailboxService(
                     throw new InvalidOperationException("Junk folder path is not configured for the source mailbox.");
                 }
 
-                using var sourceClient = await ConnectAsync(sourceMailbox, cancellationToken);
+                using var sourceClient = await imapClientFactory.CreateConnectedClientAsync(sourceMailbox, cancellationToken);
                 var sourceFolder = await OpenSourceFolderAsync(sourceClient, sourceMailbox, FolderAccess.ReadWrite, cancellationToken);
                 var junkFolder = await sourceClient.GetFolderAsync(sourceMailbox.JunkFolderPath, cancellationToken);
 
@@ -112,14 +111,14 @@ internal sealed class MailKitMailboxService(
                 var sourceMailbox = await this.GetIncomingMailboxByMessageIdAsync(messageId, cancellationToken);
                 var destinationMailbox = await this.GetOutgoingMailboxByIdAsync(mailboxId, cancellationToken);
 
-                using var sourceClient = await ConnectAsync(sourceMailbox, cancellationToken);
+                using var sourceClient = await imapClientFactory.CreateConnectedClientAsync(sourceMailbox, cancellationToken);
                 var sourceFolder = await OpenSourceFolderAsync(sourceClient, sourceMailbox, FolderAccess.ReadWrite, cancellationToken);
                 var uid = new UniqueId(messageId.Uid);
 
                 // Read from source then append to destination (cross-account move semantics).
                 var message = await sourceFolder.GetMessageAsync(uid, cancellationToken);
 
-                using var destinationClient = await ConnectAsync(destinationMailbox, cancellationToken);
+                using var destinationClient = await imapClientFactory.CreateConnectedClientAsync(destinationMailbox, cancellationToken);
                 var destinationFolder = String.IsNullOrWhiteSpace(destinationMailbox.OutboxFolderPath)
                     ? destinationClient.Inbox
                     : await destinationClient.GetFolderAsync(destinationMailbox.OutboxFolderPath, cancellationToken);
@@ -205,7 +204,7 @@ internal sealed class MailKitMailboxService(
 
     private async Task<IReadOnlyList<MessageHeader>> GetMailboxHeadersAsync(MailboxConfig mailbox, CancellationToken cancellationToken)
     {
-        using var client = await ConnectAsync(mailbox, cancellationToken);
+        using var client = await imapClientFactory.CreateConnectedClientAsync(mailbox, cancellationToken);
         var sourceFolder = await OpenSourceFolderAsync(client, mailbox, FolderAccess.ReadOnly, cancellationToken);
 
         var allUids = await sourceFolder.SearchAsync(SearchQuery.All, cancellationToken);
@@ -231,19 +230,6 @@ internal sealed class MailKitMailboxService(
                 From: ToFullEmail(x.Envelope!.From.Mailboxes.FirstOrDefault()),
                 Subject: x.Envelope!.Subject ?? String.Empty))
             .ToList();
-    }
-
-    private async Task<ImapClient> ConnectAsync(MailboxConfig mailbox, CancellationToken cancellationToken)
-    {
-        var client = new ImapClient();
-
-        var password = stringProtector.Unprotect(mailbox.EncryptedPassword);
-        var security = ParseSecurity(mailbox.Security.ToString());
-
-        await client.ConnectAsync(mailbox.ImapHost, mailbox.ImapPort, security, cancellationToken);
-        await client.AuthenticateAsync(mailbox.Username, password, cancellationToken);
-
-        return client;
     }
 
     private static async Task<IMailFolder> OpenSourceFolderAsync(ImapClient client, MailboxConfig mailbox, FolderAccess access, CancellationToken cancellationToken)
@@ -318,16 +304,6 @@ internal sealed class MailKitMailboxService(
 
         throw new InvalidOperationException(
             $"DeleteMessage is false but mailbox {sourceMailbox.Id} does not have an Archive folder path configured.");
-    }
-
-    private static SecureSocketOptions ParseSecurity(String security)
-    {
-        return security.ToLowerInvariant() switch
-        {
-            "ssl" or "tls" => SecureSocketOptions.SslOnConnect,
-            "starttls" => SecureSocketOptions.StartTls,
-            _ => SecureSocketOptions.Auto,
-        };
     }
 
     private static FullEmail ToFullEmail(MailboxAddress? mailboxAddress)

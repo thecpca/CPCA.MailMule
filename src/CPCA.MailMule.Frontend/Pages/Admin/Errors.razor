@@ -1,0 +1,142 @@
+@using MudBlazor
+@using Microsoft.AspNetCore.Authorization
+@page "/admin/errors"
+@using CPCA.MailMule.Dtos
+@using CPCA.MailMule.Frontend.Services
+@attribute [Authorize(Roles = "Admin")]
+@inject IErrorQueueApiClient ErrorQueueApiClient
+@inject ISnackbar Snackbar
+
+<PageTitle>Error Queue</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <MudText Typo="Typo.h4">Error Queue</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+            OnClick="@LoadAsync" Disabled="@loading"
+            StartIcon="@Icons.Material.Filled.Refresh">
+            Refresh
+        </MudButton>
+    </MudStack>
+
+    @if (loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (errors.Count == 0)
+    {
+        <MudAlert Severity="Severity.Success">No messages in error state.</MudAlert>
+    }
+    else
+    {
+        <MudTable Items="@errors" Hover="true" Elevation="1" Dense="true">
+            <HeaderContent>
+                <MudTh>ID</MudTh>
+                <MudTh>Mailbox</MudTh>
+                <MudTh>UID</MudTh>
+                <MudTh>Error Time</MudTh>
+                <MudTh>Error Code</MudTh>
+                <MudTh>Error Detail</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="ID">@context.Id</MudTd>
+                <MudTd DataLabel="Mailbox">@context.MailboxConfigId</MudTd>
+                <MudTd DataLabel="UID">@context.Uid</MudTd>
+                <MudTd DataLabel="Error Time">@(context.ErrorUtc?.ToString("g") ?? "—")</MudTd>
+                <MudTd DataLabel="Error Code">@(context.ErrorCode ?? "—")</MudTd>
+                <MudTd DataLabel="Error Detail">
+                    <MudTooltip Text="@(context.ErrorDetail ?? String.Empty)">
+                        <MudText Typo="Typo.body2" Style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            @(context.ErrorDetail ?? "—")
+                        </MudText>
+                    </MudTooltip>
+                </MudTd>
+                <MudTd DataLabel="Actions">
+                    <MudStack Row="true" Spacing="1">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                            OnClick="@(() => RequeueAsync(context.Id))"
+                            Disabled="@processingIds.Contains(context.Id)">
+                            Re-queue
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                            OnClick="@(() => DismissAsync(context.Id))"
+                            Disabled="@processingIds.Contains(context.Id)">
+                            Dismiss
+                        </MudButton>
+                    </MudStack>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudStack>
+
+@code {
+    private List<IncomingMessageDto> errors = [];
+    private readonly HashSet<Int64> processingIds = [];
+    private Boolean loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            var result = await ErrorQueueApiClient.GetErrorsAsync();
+            errors = [.. result];
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task RequeueAsync(Int64 id)
+    {
+        processingIds.Add(id);
+        try
+        {
+            var success = await ErrorQueueApiClient.RequeueAsync(id);
+            if (success)
+            {
+                errors.RemoveAll(x => x.Id == id);
+                Snackbar.Add("Message requeued.", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to requeue message.", Severity.Error);
+            }
+        }
+        finally
+        {
+            processingIds.Remove(id);
+        }
+    }
+
+    private async Task DismissAsync(Int64 id)
+    {
+        processingIds.Add(id);
+        try
+        {
+            var success = await ErrorQueueApiClient.DismissAsync(id);
+            if (success)
+            {
+                errors.RemoveAll(x => x.Id == id);
+                Snackbar.Add("Message dismissed.", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to dismiss message.", Severity.Error);
+            }
+        }
+        finally
+        {
+            processingIds.Remove(id);
+        }
+    }
+}

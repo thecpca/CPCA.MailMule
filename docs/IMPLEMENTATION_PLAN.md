@@ -198,7 +198,8 @@ from day one.
 Current status:
 - Mailbox configuration persistence, CRUD APIs, and `/admin/incoming` + `/admin/outgoing` pages are implemented.
 - Connection testing is implemented.
-- `ApplicationSettings` and `UserSettings` persistence exists, but `/admin/settings` is not implemented yet.
+- `ApplicationSettings` and `UserSettings` persistence, services, DTOs, API endpoints, and `/admin/settings` UI are implemented.
+- `/admin/settings` includes both `UserSettings` (UndoWindowSeconds, PageSize) and `ApplicationSettings` (InactivityTimeoutMinutes).
 
 ### Data Model (persisted through EF Core)
 
@@ -252,7 +253,8 @@ Encapsulate all IMAP operations so that safety rules are enforced by the type sy
 Current status:
 - `IMailboxService`, `IImapConnectionTester`, and `IStringProtector` are implemented.
 - Core MailKit routing and retrieval operations exist with structured logging.
-- `IImapClientFactory`, `IOutgoingMailboxService`, and pooled/persisted IMAP client abstractions are not implemented.
+- `IImapClientFactory` and `MailKitImapClientFactory` are implemented; `MailKitMailboxService` refactored to use factory.
+- `IOutgoingMailboxService` and pooled/persisted IMAP client abstractions are not implemented.
 
 ### Interfaces (in `CPCA.MailMule.Application.Contracts`)
 
@@ -523,7 +525,8 @@ Current status:
 - Correlation ID middleware and propagation are implemented in Backend and ImapService.
 - Structured logs for routing, junk, and admin mailbox changes are implemented.
 - Web test coverage exists for the health endpoints and correlation headers.
-- Error queue, poll-cycle worker logging, and broader integration coverage are still outstanding.
+- Error queue (`/admin/errors`) is implemented with list, requeue, and dismiss operations (backend API + frontend page).
+- Poll-cycle worker logging and broader integration coverage are still outstanding.
 
 ---
 
