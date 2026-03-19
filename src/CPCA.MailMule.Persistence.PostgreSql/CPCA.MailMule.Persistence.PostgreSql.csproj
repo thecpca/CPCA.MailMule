@@ -7,7 +7,6 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\CPCA.MailMule.Domain\CPCA.MailMule.Domain.csproj" />
     <ProjectReference Include="..\CPCA.MailMule.Persistence\CPCA.MailMule.Persistence.csproj" />
   </ItemGroup>
   <PropertyGroup>

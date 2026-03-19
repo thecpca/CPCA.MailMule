@@ -5,7 +5,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\CPCA.MailMule.Core\CPCA.MailMule.Core.csproj" />
-    <ProjectReference Include="..\CPCA.MailMule.Domain\CPCA.MailMule.Domain.csproj" />
   </ItemGroup>
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
