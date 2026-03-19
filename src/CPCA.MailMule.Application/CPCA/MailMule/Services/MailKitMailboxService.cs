@@ -7,6 +7,7 @@ using MailKit.Search;
 using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using MimeKit;
+using System.Diagnostics;
 
 internal sealed class MailKitMailboxService(
     MailboxConfigRepository mailboxConfigRepository,
@@ -17,85 +18,178 @@ internal sealed class MailKitMailboxService(
 
     public async Task<IReadOnlyList<MessageHeader>> GetHeadersAsync(CancellationToken cancellationToken = default)
     {
-        var incomingMailboxes = await mailboxConfigRepository.GetByMailboxTypeAsync("Incoming", cancellationToken);
-        var activeMailboxes = incomingMailboxes.Where(x => x.IsActive).ToList();
-
-        var headers = new List<MessageHeader>();
-
-        foreach (var mailbox in activeMailboxes)
-        {
-            try
+        return await ExecuteImapOperationAsync(
+            operationName: "GetHeaders",
+            mailboxId: null,
+            messageUid: null,
+            action: async () =>
             {
-                var mailboxHeaders = await this.GetMailboxHeadersAsync(mailbox, cancellationToken);
-                headers.AddRange(mailboxHeaders);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to fetch headers for mailbox {MailboxId}", mailbox.Id);
-            }
-        }
+                var incomingMailboxes = await mailboxConfigRepository.GetByMailboxTypeAsync("Incoming", cancellationToken);
+                var activeMailboxes = incomingMailboxes.Where(x => x.IsActive).ToList();
 
-        return headers
-            .OrderByDescending(x => x.Date)
-            .ToList();
+                var headers = new List<MessageHeader>();
+
+                foreach (var mailbox in activeMailboxes)
+                {
+                    try
+                    {
+                        var mailboxHeaders = await this.GetMailboxHeadersAsync(mailbox, cancellationToken);
+                        headers.AddRange(mailboxHeaders);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "Failed to fetch headers for mailbox {MailboxId}", mailbox.Id);
+                    }
+                }
+
+                return headers
+                    .OrderByDescending(x => x.Date)
+                    .ToList();
+            });
     }
 
     public async Task<MimeMessage> GetMessageAsync(MessageId messageId, CancellationToken cancellationToken = default)
     {
-        var mailbox = await this.GetIncomingMailboxByMessageIdAsync(messageId, cancellationToken);
+        return await ExecuteImapOperationAsync(
+            operationName: "GetMessage",
+            mailboxId: FromMailboxId(messageId.Mailbox),
+            messageUid: messageId.Uid,
+            action: async () =>
+            {
+                var mailbox = await this.GetIncomingMailboxByMessageIdAsync(messageId, cancellationToken);
 
-        using var client = await ConnectAsync(mailbox, cancellationToken);
-        var sourceFolder = await OpenSourceFolderAsync(client, mailbox, FolderAccess.ReadOnly, cancellationToken);
+                using var client = await ConnectAsync(mailbox, cancellationToken);
+                var sourceFolder = await OpenSourceFolderAsync(client, mailbox, FolderAccess.ReadOnly, cancellationToken);
 
-        var uniqueId = new UniqueId(messageId.Uid);
-        return await sourceFolder.GetMessageAsync(uniqueId, cancellationToken);
+                var uniqueId = new UniqueId(messageId.Uid);
+                return await sourceFolder.GetMessageAsync(uniqueId, cancellationToken);
+            });
     }
 
     public async Task RouteToJunkAsync(MessageId messageId, CancellationToken cancellationToken = default)
     {
-        var sourceMailbox = await this.GetIncomingMailboxByMessageIdAsync(messageId, cancellationToken);
+        await ExecuteImapOperationAsync(
+            operationName: "RouteToJunk",
+            mailboxId: FromMailboxId(messageId.Mailbox),
+            messageUid: messageId.Uid,
+            action: async () =>
+            {
+                var sourceMailbox = await this.GetIncomingMailboxByMessageIdAsync(messageId, cancellationToken);
 
-        if (String.IsNullOrWhiteSpace(sourceMailbox.TrashFolderPath))
-        {
-            throw new InvalidOperationException("Junk folder path is not configured for the source mailbox.");
-        }
+                if (String.IsNullOrWhiteSpace(sourceMailbox.TrashFolderPath))
+                {
+                    throw new InvalidOperationException("Junk folder path is not configured for the source mailbox.");
+                }
 
-        using var sourceClient = await ConnectAsync(sourceMailbox, cancellationToken);
-        var sourceFolder = await OpenSourceFolderAsync(sourceClient, sourceMailbox, FolderAccess.ReadWrite, cancellationToken);
-        var junkFolder = await sourceClient.GetFolderAsync(sourceMailbox.TrashFolderPath, cancellationToken);
+                using var sourceClient = await ConnectAsync(sourceMailbox, cancellationToken);
+                var sourceFolder = await OpenSourceFolderAsync(sourceClient, sourceMailbox, FolderAccess.ReadWrite, cancellationToken);
+                var junkFolder = await sourceClient.GetFolderAsync(sourceMailbox.TrashFolderPath, cancellationToken);
 
-        var uid = new UniqueId(messageId.Uid);
-        await sourceFolder.MoveToAsync(uid, junkFolder, cancellationToken);
+                var uid = new UniqueId(messageId.Uid);
+                await sourceFolder.MoveToAsync(uid, junkFolder, cancellationToken);
 
-        logger.LogInformation("Moved message {MessageUid} from mailbox {MailboxId} to junk folder.", messageId.Uid, sourceMailbox.Id);
+                logger.LogInformation("Moved message {MessageUid} from mailbox {MailboxId} to junk folder.", messageId.Uid, sourceMailbox.Id);
+
+                return true;
+            });
     }
 
     public async Task RouteToMailboxAsync(MessageId messageId, MailboxId mailboxId, CancellationToken cancellationToken = default)
     {
-        var sourceMailbox = await this.GetIncomingMailboxByMessageIdAsync(messageId, cancellationToken);
-        var destinationMailbox = await this.GetOutgoingMailboxByIdAsync(mailboxId, cancellationToken);
+        await ExecuteImapOperationAsync(
+            operationName: "RouteToMailbox",
+            mailboxId: FromMailboxId(messageId.Mailbox),
+            messageUid: messageId.Uid,
+            action: async () =>
+            {
+                var sourceMailbox = await this.GetIncomingMailboxByMessageIdAsync(messageId, cancellationToken);
+                var destinationMailbox = await this.GetOutgoingMailboxByIdAsync(mailboxId, cancellationToken);
 
-        using var sourceClient = await ConnectAsync(sourceMailbox, cancellationToken);
-        var sourceFolder = await OpenSourceFolderAsync(sourceClient, sourceMailbox, FolderAccess.ReadWrite, cancellationToken);
-        var uid = new UniqueId(messageId.Uid);
+                using var sourceClient = await ConnectAsync(sourceMailbox, cancellationToken);
+                var sourceFolder = await OpenSourceFolderAsync(sourceClient, sourceMailbox, FolderAccess.ReadWrite, cancellationToken);
+                var uid = new UniqueId(messageId.Uid);
 
-        // Read from source then append to destination (cross-account move semantics).
-        var message = await sourceFolder.GetMessageAsync(uid, cancellationToken);
+                // Read from source then append to destination (cross-account move semantics).
+                var message = await sourceFolder.GetMessageAsync(uid, cancellationToken);
 
-        using var destinationClient = await ConnectAsync(destinationMailbox, cancellationToken);
-        var destinationFolder = String.IsNullOrWhiteSpace(destinationMailbox.OutboxFolderPath)
-            ? destinationClient.Inbox
-            : await destinationClient.GetFolderAsync(destinationMailbox.OutboxFolderPath, cancellationToken);
+                using var destinationClient = await ConnectAsync(destinationMailbox, cancellationToken);
+                var destinationFolder = String.IsNullOrWhiteSpace(destinationMailbox.OutboxFolderPath)
+                    ? destinationClient.Inbox
+                    : await destinationClient.GetFolderAsync(destinationMailbox.OutboxFolderPath, cancellationToken);
 
-        await destinationFolder.AppendAsync(new AppendRequest(message), cancellationToken);
+                await destinationFolder.AppendAsync(new AppendRequest(message), cancellationToken);
 
-        await this.RemoveFromSourceMailboxAsync(sourceFolder, sourceClient, sourceMailbox, uid, cancellationToken);
+                await this.RemoveFromSourceMailboxAsync(sourceFolder, sourceClient, sourceMailbox, uid, cancellationToken);
 
+                logger.LogInformation(
+                    "Routed message {MessageUid} from source mailbox {SourceMailboxId} to destination mailbox {DestinationMailboxId}.",
+                    messageId.Uid,
+                    sourceMailbox.Id,
+                    destinationMailbox.Id);
+
+                return true;
+            });
+    }
+
+    private async Task<T> ExecuteImapOperationAsync<T>(
+        String operationName,
+        Int64? mailboxId,
+        UInt32? messageUid,
+        Func<Task<T>> action)
+    {
         logger.LogInformation(
-            "Routed message {MessageUid} from source mailbox {SourceMailboxId} to destination mailbox {DestinationMailboxId}.",
-            messageId.Uid,
-            sourceMailbox.Id,
-            destinationMailbox.Id);
+            "Starting IMAP operation {OperationName} (MailboxId: {MailboxId}, MessageUid: {MessageUid})",
+            operationName,
+            mailboxId,
+            messageUid);
+
+        var stopwatch = Stopwatch.StartNew();
+
+        try
+        {
+            var result = await action();
+            stopwatch.Stop();
+
+            logger.LogInformation(
+                "Completed IMAP operation {OperationName} in {DurationMs}ms (MailboxId: {MailboxId}, MessageUid: {MessageUid})",
+                operationName,
+                stopwatch.ElapsedMilliseconds,
+                mailboxId,
+                messageUid);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+
+            logger.LogError(
+                ex,
+                "Failed IMAP operation {OperationName} after {DurationMs}ms (MailboxId: {MailboxId}, MessageUid: {MessageUid})",
+                operationName,
+                stopwatch.ElapsedMilliseconds,
+                mailboxId,
+                messageUid);
+
+            throw;
+        }
+    }
+
+    private async Task ExecuteImapOperationAsync(
+        String operationName,
+        Int64? mailboxId,
+        UInt32? messageUid,
+        Func<Task> action)
+    {
+        await ExecuteImapOperationAsync(
+            operationName,
+            mailboxId,
+            messageUid,
+            async () =>
+            {
+                await action();
+                return true;
+            });
     }
 
     private async Task<IReadOnlyList<MessageHeader>> GetMailboxHeadersAsync(MailboxConfig mailbox, CancellationToken cancellationToken)
