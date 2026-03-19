@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace CPCA.MailMule;
 
 public sealed class MailboxConfig
@@ -24,7 +26,10 @@ public sealed class MailboxConfig
 
     public String? SentFolderPath { get; set; }
 
-    public String? TrashFolderPath { get; set; }
+    [Column("TrashFolderPath")]
+    public String? ArchiveFolderPath { get; set; }
+
+    public String? JunkFolderPath { get; set; }
 
     public Int32 PollIntervalSeconds { get; set; } = 20;
 

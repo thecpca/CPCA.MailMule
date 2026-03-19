@@ -76,14 +76,14 @@ internal sealed class MailKitMailboxService(
             {
                 var sourceMailbox = await this.GetIncomingMailboxByMessageIdAsync(messageId, cancellationToken);
 
-                if (String.IsNullOrWhiteSpace(sourceMailbox.TrashFolderPath))
+                if (String.IsNullOrWhiteSpace(sourceMailbox.JunkFolderPath))
                 {
                     throw new InvalidOperationException("Junk folder path is not configured for the source mailbox.");
                 }
 
                 using var sourceClient = await ConnectAsync(sourceMailbox, cancellationToken);
                 var sourceFolder = await OpenSourceFolderAsync(sourceClient, sourceMailbox, FolderAccess.ReadWrite, cancellationToken);
-                var junkFolder = await sourceClient.GetFolderAsync(sourceMailbox.TrashFolderPath, cancellationToken);
+                var junkFolder = await sourceClient.GetFolderAsync(sourceMailbox.JunkFolderPath, cancellationToken);
 
                 var uid = new UniqueId(messageId.Uid);
                 await sourceFolder.MoveToAsync(uid, junkFolder, cancellationToken);
@@ -298,15 +298,15 @@ internal sealed class MailKitMailboxService(
             return;
         }
 
-        if (!String.IsNullOrWhiteSpace(sourceMailbox.TrashFolderPath))
+        if (!String.IsNullOrWhiteSpace(sourceMailbox.ArchiveFolderPath))
         {
-            var archiveFolder = await sourceClient.GetFolderAsync(sourceMailbox.TrashFolderPath, cancellationToken);
+            var archiveFolder = await sourceClient.GetFolderAsync(sourceMailbox.ArchiveFolderPath, cancellationToken);
             await sourceFolder.MoveToAsync(uid, archiveFolder, cancellationToken);
             return;
         }
 
         throw new InvalidOperationException(
-            $"DeleteMessage is false but mailbox {sourceMailbox.Id} does not have a Trash/Archive folder path configured.");
+            $"DeleteMessage is false but mailbox {sourceMailbox.Id} does not have an Archive folder path configured.");
     }
 
     private static SecureSocketOptions ParseSecurity(String security)

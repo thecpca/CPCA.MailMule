@@ -50,6 +50,11 @@ namespace CPCA.MailMule.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("ArchiveFolderPath")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("TrashFolderPath");
+
                     b.Property<bool>("DeleteMessage")
                         .HasColumnType("boolean");
 
@@ -78,6 +83,10 @@ namespace CPCA.MailMule.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("JunkFolderPath")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
                     b.Property<DateTime?>("LastPolledUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -100,10 +109,6 @@ namespace CPCA.MailMule.Migrations
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
-
-                    b.Property<string>("TrashFolderPath")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
 
                     b.Property<string>("Username")
                         .IsRequired()

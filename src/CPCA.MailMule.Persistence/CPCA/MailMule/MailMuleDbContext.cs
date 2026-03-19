@@ -44,7 +44,10 @@ public sealed class MailMuleDbContext(DbContextOptions<MailMuleDbContext> option
             entity.Property(x => x.SentFolderPath)
                 .HasMaxLength(255);
 
-            entity.Property(x => x.TrashFolderPath)
+            entity.Property(x => x.ArchiveFolderPath)
+                .HasMaxLength(255);
+
+            entity.Property(x => x.JunkFolderPath)
                 .HasMaxLength(255);
 
             entity.Property(x => x.PollIntervalSeconds)

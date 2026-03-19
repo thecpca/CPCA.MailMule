@@ -8,7 +8,7 @@ namespace CPCA.MailMule.Tests;
 public sealed class MailboxConfigServiceConnectionTests
 {
     [Fact]
-    public async Task CreateMailboxAsync_IncomingMailboxWithoutDeleteAndWithoutArchiveFolder_Throws()
+    public async Task CreateMailboxAsync_IncomingMailboxWithoutJunkFolder_Throws()
     {
         // Arrange
         var service = BuildServiceProvider(new SpyImapConnectionTester()).GetRequiredService<IMailboxConfigService>();
@@ -24,7 +24,8 @@ public sealed class MailboxConfigServiceConnectionTests
             InboxFolderPath: "INBOX",
             OutboxFolderPath: null,
             SentFolderPath: null,
-            TrashFolderPath: null,
+            ArchiveFolderPath: "Archive",
+            JunkFolderPath: null,
             PollIntervalSeconds: 300,
             DeleteMessage: false,
             IsActive: true,
@@ -32,11 +33,11 @@ public sealed class MailboxConfigServiceConnectionTests
 
         // Act / Assert
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateMailboxAsync(request, TestContext.Current.CancellationToken));
-        Assert.Equal("Incoming mailboxes that retain messages must configure a Trash/Archive folder path.", ex.Message);
+        Assert.Equal("Incoming mailboxes must configure a Junk folder path.", ex.Message);
     }
 
     [Fact]
-    public async Task CreateMailboxAsync_IncomingMailboxWithoutDeleteAndWithArchiveFolder_Succeeds()
+    public async Task CreateMailboxAsync_IncomingMailboxWithoutDeleteAndWithArchiveAndJunkFolders_Succeeds()
     {
         // Arrange
         var service = BuildServiceProvider(new SpyImapConnectionTester()).GetRequiredService<IMailboxConfigService>();
@@ -52,7 +53,8 @@ public sealed class MailboxConfigServiceConnectionTests
             InboxFolderPath: "INBOX",
             OutboxFolderPath: null,
             SentFolderPath: null,
-            TrashFolderPath: "Archive",
+            ArchiveFolderPath: "Archive",
+            JunkFolderPath: "Junk",
             PollIntervalSeconds: 300,
             DeleteMessage: false,
             IsActive: true,
@@ -63,6 +65,35 @@ public sealed class MailboxConfigServiceConnectionTests
 
         // Assert
         Assert.True(id > 0);
+    }
+
+    [Fact]
+    public async Task CreateMailboxAsync_IncomingMailboxWithoutDeleteAndWithoutArchiveFolder_Throws()
+    {
+        // Arrange
+        var service = BuildServiceProvider(new SpyImapConnectionTester()).GetRequiredService<IMailboxConfigService>();
+
+        var request = new CreateMailboxConfigDto(
+            DisplayName: "Incoming C",
+            ImapHost: "imap.example.com",
+            ImapPort: 993,
+            MailboxType: "Incoming",
+            Security: "Ssl",
+            Username: "user@example.com",
+            Password: "secret",
+            InboxFolderPath: "INBOX",
+            OutboxFolderPath: null,
+            SentFolderPath: null,
+            ArchiveFolderPath: null,
+            JunkFolderPath: "Junk",
+            PollIntervalSeconds: 300,
+            DeleteMessage: false,
+            IsActive: true,
+            SortOrder: 0);
+
+        // Act / Assert
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateMailboxAsync(request, TestContext.Current.CancellationToken));
+        Assert.Equal("Incoming mailboxes that retain messages must configure an Archive folder path.", ex.Message);
     }
 
     [Fact]

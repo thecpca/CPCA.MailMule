@@ -43,7 +43,11 @@ internal sealed class MailboxConfigService : IMailboxConfigService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        ValidateIncomingRetentionConfiguration(request.MailboxType, request.DeleteMessage, request.TrashFolderPath);
+        ValidateIncomingFolderConfiguration(
+            request.MailboxType,
+            request.DeleteMessage,
+            request.ArchiveFolderPath,
+            request.JunkFolderPath);
 
         this.logger.LogInformation("Creating mailbox: {DisplayName}", request.DisplayName);
 
@@ -68,7 +72,8 @@ internal sealed class MailboxConfigService : IMailboxConfigService
             InboxFolderPath = request.InboxFolderPath,
             OutboxFolderPath = request.OutboxFolderPath,
             SentFolderPath = request.SentFolderPath,
-            TrashFolderPath = request.TrashFolderPath,
+            ArchiveFolderPath = request.ArchiveFolderPath,
+            JunkFolderPath = request.JunkFolderPath,
             PollIntervalSeconds = request.PollIntervalSeconds,
             DeleteMessage = request.DeleteMessage,
             IsActive = request.IsActive,
@@ -85,7 +90,11 @@ internal sealed class MailboxConfigService : IMailboxConfigService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        ValidateIncomingRetentionConfiguration(request.MailboxType, request.DeleteMessage, request.TrashFolderPath);
+        ValidateIncomingFolderConfiguration(
+            request.MailboxType,
+            request.DeleteMessage,
+            request.ArchiveFolderPath,
+            request.JunkFolderPath);
 
         this.logger.LogInformation("Updating mailbox: {MailboxId}", request.Id);
 
@@ -107,7 +116,8 @@ internal sealed class MailboxConfigService : IMailboxConfigService
         mailbox.InboxFolderPath = request.InboxFolderPath;
         mailbox.OutboxFolderPath = request.OutboxFolderPath;
         mailbox.SentFolderPath = request.SentFolderPath;
-        mailbox.TrashFolderPath = request.TrashFolderPath;
+        mailbox.ArchiveFolderPath = request.ArchiveFolderPath;
+        mailbox.JunkFolderPath = request.JunkFolderPath;
         mailbox.PollIntervalSeconds = request.PollIntervalSeconds;
         mailbox.DeleteMessage = request.DeleteMessage;
         mailbox.IsActive = request.IsActive;
@@ -161,17 +171,27 @@ internal sealed class MailboxConfigService : IMailboxConfigService
         return await this.imapConnectionTester.TestConnectionAsync(request, cancellationToken);
     }
 
-    private static void ValidateIncomingRetentionConfiguration(String mailboxType, Boolean deleteMessage, String? archiveOrJunkFolderPath)
+    private static void ValidateIncomingFolderConfiguration(
+        String mailboxType,
+        Boolean deleteMessage,
+        String? archiveFolderPath,
+        String? junkFolderPath)
     {
         if (!mailboxType.Equals("Incoming", StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
 
-        if (!deleteMessage && String.IsNullOrWhiteSpace(archiveOrJunkFolderPath))
+        if (String.IsNullOrWhiteSpace(junkFolderPath))
         {
             throw new InvalidOperationException(
-                "Incoming mailboxes that retain messages must configure a Trash/Archive folder path.");
+                "Incoming mailboxes must configure a Junk folder path.");
+        }
+
+        if (!deleteMessage && String.IsNullOrWhiteSpace(archiveFolderPath))
+        {
+            throw new InvalidOperationException(
+                "Incoming mailboxes that retain messages must configure an Archive folder path.");
         }
     }
 
@@ -188,7 +208,8 @@ internal sealed class MailboxConfigService : IMailboxConfigService
             InboxFolderPath: mailbox.InboxFolderPath,
             OutboxFolderPath: mailbox.OutboxFolderPath,
             SentFolderPath: mailbox.SentFolderPath,
-            TrashFolderPath: mailbox.TrashFolderPath,
+            ArchiveFolderPath: mailbox.ArchiveFolderPath,
+            JunkFolderPath: mailbox.JunkFolderPath,
             PollIntervalSeconds: mailbox.PollIntervalSeconds,
             DeleteMessage: mailbox.DeleteMessage,
             IsActive: mailbox.IsActive,

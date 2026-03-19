@@ -44,8 +44,11 @@
                 <MudTextField @bind-Value="formData.SentFolderPath" Label="Sent Folder Path" 
                     Variant="Variant.Outlined" HelperText="Leave empty for default" />
                 
-                <MudTextField @bind-Value="formData.TrashFolderPath" Label="Trash / Archive Folder Path" 
+                <MudTextField @bind-Value="formData.ArchiveFolderPath" Label="Archive Folder Path" 
                     Variant="Variant.Outlined" HelperText="Required for incoming mailboxes when messages are retained" />
+
+                <MudTextField @bind-Value="formData.JunkFolderPath" Label="Junk Folder Path"
+                    Variant="Variant.Outlined" HelperText="Required for incoming mailboxes" />
 
                 <MudNumericField @bind-Value="formData.PollIntervalSeconds" Label="Polling Interval (seconds)" 
                     Variant="Variant.Outlined" Min="10" Max="3600" HelperText="How often to check for new messages" />
@@ -87,7 +90,8 @@
         public string? InboxFolderPath { get; set; }
         public string? OutboxFolderPath { get; set; }
         public string? SentFolderPath { get; set; }
-        public string? TrashFolderPath { get; set; }
+        public string? ArchiveFolderPath { get; set; }
+        public string? JunkFolderPath { get; set; }
         public int PollIntervalSeconds { get; set; } = 300;
         public bool DeleteMessage { get; set; }
         public bool IsActive { get; set; } = true;
@@ -109,7 +113,8 @@
         InboxFolderPath: null,
         OutboxFolderPath: null,
         SentFolderPath: null,
-        TrashFolderPath: null,
+        ArchiveFolderPath: null,
+        JunkFolderPath: null,
         PollIntervalSeconds: 300,
         DeleteMessage: false,
         IsActive: true,
@@ -142,7 +147,8 @@
         formData.InboxFolderPath = Request.InboxFolderPath;
         formData.OutboxFolderPath = Request.OutboxFolderPath;
         formData.SentFolderPath = Request.SentFolderPath;
-        formData.TrashFolderPath = Request.TrashFolderPath;
+        formData.ArchiveFolderPath = Request.ArchiveFolderPath;
+        formData.JunkFolderPath = Request.JunkFolderPath;
         formData.PollIntervalSeconds = Request.PollIntervalSeconds;
         formData.DeleteMessage = Request.DeleteMessage;
         formData.IsActive = Request.IsActive;
@@ -196,7 +202,8 @@
             InboxFolderPath: formData.InboxFolderPath,
             OutboxFolderPath: formData.OutboxFolderPath,
             SentFolderPath: formData.SentFolderPath,
-            TrashFolderPath: formData.TrashFolderPath,
+            ArchiveFolderPath: formData.ArchiveFolderPath,
+            JunkFolderPath: formData.JunkFolderPath,
             PollIntervalSeconds: formData.PollIntervalSeconds,
             DeleteMessage: formData.DeleteMessage,
             IsActive: formData.IsActive,
