@@ -86,9 +86,16 @@ internal sealed class MailKitMailboxService(
                 var junkFolder = await sourceClient.GetFolderAsync(sourceMailbox.JunkFolderPath, cancellationToken);
 
                 var uid = new UniqueId(messageId.Uid);
+                var message = await sourceFolder.GetMessageAsync(uid, cancellationToken);
                 await sourceFolder.MoveToAsync(uid, junkFolder, cancellationToken);
 
-                logger.LogInformation("Moved message {MessageUid} from mailbox {MailboxId} to junk folder.", messageId.Uid, sourceMailbox.Id);
+                logger.LogInformation(
+                    "Junked message {MessageUid} from mailbox {MailboxId}. Sender: {Sender}, Subject: {Subject}, MessageDate: {MessageDate}",
+                    messageId.Uid,
+                    sourceMailbox.Id,
+                    message.From.Mailboxes.FirstOrDefault()?.Address ?? String.Empty,
+                    message.Subject ?? String.Empty,
+                    message.Date);
 
                 return true;
             });
@@ -122,10 +129,14 @@ internal sealed class MailKitMailboxService(
                 await this.RemoveFromSourceMailboxAsync(sourceFolder, sourceClient, sourceMailbox, uid, cancellationToken);
 
                 logger.LogInformation(
-                    "Routed message {MessageUid} from source mailbox {SourceMailboxId} to destination mailbox {DestinationMailboxId}.",
+                    "Routed message {MessageUid} from source mailbox {SourceMailboxId} to destination mailbox {DestinationMailboxId} ({DestinationMailboxName}). Sender: {Sender}, Subject: {Subject}, MessageDate: {MessageDate}",
                     messageId.Uid,
                     sourceMailbox.Id,
-                    destinationMailbox.Id);
+                    destinationMailbox.Id,
+                    destinationMailbox.DisplayName,
+                    message.From.Mailboxes.FirstOrDefault()?.Address ?? String.Empty,
+                    message.Subject ?? String.Empty,
+                    message.Date);
 
                 return true;
             });

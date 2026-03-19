@@ -14,6 +14,7 @@
 
 using CPCA.MailMule;
 using CPCA.MailMule.Backend.HealthChecks;
+using CPCA.MailMule.Backend.Middleware;
 using CPCA.MailMule.Backend.Services;
 using CPCA.MailMule.Dtos;
 using CPCA.MailMule.Services;
@@ -150,6 +151,7 @@ public static class Program
         // -----------------------------
         var app = builder.Build();
 
+        app.UseMiddleware<CorrelationIdMiddleware>();
         app.UseSerilogRequestLogging();
 
         // Configure the HTTP request pipeline.
@@ -243,18 +245,24 @@ public static class Program
         })
         .RequireAuthorization()
         .WithName("ListIncomingMailboxes")
-        .WithOpenApi()
         .Produces<IEnumerable<MailboxConfigDto>>();
 
         // POST /admin/incoming - Create incoming mailbox
-        app.MapPost("/admin/incoming", async (CreateMailboxConfigDto dto, IMailboxConfigService service, CancellationToken ct) =>
+        app.MapPost("/admin/incoming", async (CreateMailboxConfigDto dto, IMailboxConfigService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
         {
             var id = await service.CreateMailboxAsync(dto with { MailboxType = "Incoming" }, ct);
+
+            logger.LogInformation(
+                "Admin mailbox configuration created by {User} for {MailboxType} mailbox {MailboxId} ({DisplayName})",
+                GetCurrentUserName(context),
+                "Incoming",
+                id,
+                dto.DisplayName);
+
             return Results.Created($"/admin/incoming/{id}", id);
         })
         .RequireAuthorization()
         .WithName("CreateIncomingMailbox")
-        .WithOpenApi()
         .Produces<Int64>(StatusCodes.Status201Created)
         .Produces(StatusCodes.Status400BadRequest)
         .Produces(StatusCodes.Status409Conflict);
@@ -267,21 +275,39 @@ public static class Program
         })
         .RequireAuthorization()
         .WithName("GetIncomingMailbox")
-        .WithOpenApi()
         .Produces<MailboxConfigDto>()
         .Produces(StatusCodes.Status404NotFound);
 
         // PUT /admin/incoming/{id} - Update incoming mailbox
-        app.MapPut("/admin/incoming/{id:long}", async (Int64 id, UpdateMailboxConfigDto dto, IMailboxConfigService service, CancellationToken ct) =>
+        app.MapPut("/admin/incoming/{id:long}", async (Int64 id, UpdateMailboxConfigDto dto, IMailboxConfigService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
         {
             if (dto.Id != id)
             {
                 return Results.BadRequest("ID mismatch");
             }
 
+            var existingMailbox = await service.GetMailboxAsync(id, ct);
+            if (existingMailbox == null)
+            {
+                return Results.NotFound();
+            }
+
+            var changedFields = GetChangedFields(existingMailbox, dto);
+
             try
             {
                 await service.UpdateMailboxAsync(dto, ct);
+
+                foreach (var fieldName in changedFields)
+                {
+                    logger.LogInformation(
+                        "Admin mailbox configuration field changed by {User}: {MailboxType} mailbox {MailboxId} {FieldName}",
+                        GetCurrentUserName(context),
+                        "Incoming",
+                        id,
+                        fieldName);
+                }
+
                 return Results.NoContent();
             }
             catch (KeyNotFoundException)
@@ -291,17 +317,25 @@ public static class Program
         })
         .RequireAuthorization()
         .WithName("UpdateIncomingMailbox")
-        .WithOpenApi()
         .Produces(StatusCodes.Status204NoContent)
         .Produces(StatusCodes.Status400BadRequest)
         .Produces(StatusCodes.Status404NotFound);
 
         // DELETE /admin/incoming/{id} - Delete incoming mailbox
-        app.MapDelete("/admin/incoming/{id:long}", async (Int64 id, IMailboxConfigService service, CancellationToken ct) =>
+        app.MapDelete("/admin/incoming/{id:long}", async (Int64 id, IMailboxConfigService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
         {
             try
             {
+                var mailbox = await service.GetMailboxAsync(id, ct);
                 await service.DeleteMailboxAsync(id, ct);
+
+                logger.LogInformation(
+                    "Admin mailbox configuration deleted by {User} for {MailboxType} mailbox {MailboxId} ({DisplayName})",
+                    GetCurrentUserName(context),
+                    "Incoming",
+                    id,
+                    mailbox?.DisplayName ?? String.Empty);
+
                 return Results.NoContent();
             }
             catch (KeyNotFoundException)
@@ -311,7 +345,6 @@ public static class Program
         })
         .RequireAuthorization()
         .WithName("DeleteIncomingMailbox")
-        .WithOpenApi()
         .Produces(StatusCodes.Status204NoContent)
         .Produces(StatusCodes.Status404NotFound);
 
@@ -323,7 +356,6 @@ public static class Program
         })
         .RequireAuthorization()
         .WithName("TestIncomingConnection")
-        .WithOpenApi()
         .Produces<MailboxConnectionTestResult>();
 
         // GET /admin/outgoing - List all outgoing mailboxes
@@ -334,18 +366,24 @@ public static class Program
         })
         .RequireAuthorization()
         .WithName("ListOutgoingMailboxes")
-        .WithOpenApi()
         .Produces<IEnumerable<MailboxConfigDto>>();
 
         // POST /admin/outgoing - Create outgoing mailbox
-        app.MapPost("/admin/outgoing", async (CreateMailboxConfigDto dto, IMailboxConfigService service, CancellationToken ct) =>
+        app.MapPost("/admin/outgoing", async (CreateMailboxConfigDto dto, IMailboxConfigService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
         {
             var id = await service.CreateMailboxAsync(dto with { MailboxType = "Outgoing" }, ct);
+
+            logger.LogInformation(
+                "Admin mailbox configuration created by {User} for {MailboxType} mailbox {MailboxId} ({DisplayName})",
+                GetCurrentUserName(context),
+                "Outgoing",
+                id,
+                dto.DisplayName);
+
             return Results.Created($"/admin/outgoing/{id}", id);
         })
         .RequireAuthorization()
         .WithName("CreateOutgoingMailbox")
-        .WithOpenApi()
         .Produces<Int64>(StatusCodes.Status201Created)
         .Produces(StatusCodes.Status400BadRequest)
         .Produces(StatusCodes.Status409Conflict);
@@ -358,21 +396,39 @@ public static class Program
         })
         .RequireAuthorization()
         .WithName("GetOutgoingMailbox")
-        .WithOpenApi()
         .Produces<MailboxConfigDto>()
         .Produces(StatusCodes.Status404NotFound);
 
         // PUT /admin/outgoing/{id} - Update outgoing mailbox
-        app.MapPut("/admin/outgoing/{id:long}", async (Int64 id, UpdateMailboxConfigDto dto, IMailboxConfigService service, CancellationToken ct) =>
+        app.MapPut("/admin/outgoing/{id:long}", async (Int64 id, UpdateMailboxConfigDto dto, IMailboxConfigService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
         {
             if (dto.Id != id)
             {
                 return Results.BadRequest("ID mismatch");
             }
 
+            var existingMailbox = await service.GetMailboxAsync(id, ct);
+            if (existingMailbox == null)
+            {
+                return Results.NotFound();
+            }
+
+            var changedFields = GetChangedFields(existingMailbox, dto);
+
             try
             {
                 await service.UpdateMailboxAsync(dto, ct);
+
+                foreach (var fieldName in changedFields)
+                {
+                    logger.LogInformation(
+                        "Admin mailbox configuration field changed by {User}: {MailboxType} mailbox {MailboxId} {FieldName}",
+                        GetCurrentUserName(context),
+                        "Outgoing",
+                        id,
+                        fieldName);
+                }
+
                 return Results.NoContent();
             }
             catch (KeyNotFoundException)
@@ -382,17 +438,25 @@ public static class Program
         })
         .RequireAuthorization()
         .WithName("UpdateOutgoingMailbox")
-        .WithOpenApi()
         .Produces(StatusCodes.Status204NoContent)
         .Produces(StatusCodes.Status400BadRequest)
         .Produces(StatusCodes.Status404NotFound);
 
         // DELETE /admin/outgoing/{id} - Delete outgoing mailbox
-        app.MapDelete("/admin/outgoing/{id:long}", async (Int64 id, IMailboxConfigService service, CancellationToken ct) =>
+        app.MapDelete("/admin/outgoing/{id:long}", async (Int64 id, IMailboxConfigService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
         {
             try
             {
+                var mailbox = await service.GetMailboxAsync(id, ct);
                 await service.DeleteMailboxAsync(id, ct);
+
+                logger.LogInformation(
+                    "Admin mailbox configuration deleted by {User} for {MailboxType} mailbox {MailboxId} ({DisplayName})",
+                    GetCurrentUserName(context),
+                    "Outgoing",
+                    id,
+                    mailbox?.DisplayName ?? String.Empty);
+
                 return Results.NoContent();
             }
             catch (KeyNotFoundException)
@@ -402,7 +466,6 @@ public static class Program
         })
         .RequireAuthorization()
         .WithName("DeleteOutgoingMailbox")
-        .WithOpenApi()
         .Produces(StatusCodes.Status204NoContent)
         .Produces(StatusCodes.Status404NotFound);
 
@@ -414,11 +477,41 @@ public static class Program
         })
         .RequireAuthorization()
         .WithName("TestOutgoingConnection")
-        .WithOpenApi()
         .Produces<MailboxConnectionTestResult>();
         // -----------------------------
         await app.RunAsync();
     }
+
+    private static String GetCurrentUserName(HttpContext context)
+    {
+        return context.User.Identity?.Name ?? "Unknown";
+    }
+
+    private static IReadOnlyList<String> GetChangedFields(MailboxConfigDto existingMailbox, UpdateMailboxConfigDto updatedMailbox)
+    {
+        var changedFields = new List<String>();
+
+        if (!String.Equals(existingMailbox.DisplayName, updatedMailbox.DisplayName, StringComparison.Ordinal)) changedFields.Add(nameof(existingMailbox.DisplayName));
+        if (!String.Equals(existingMailbox.ImapHost, updatedMailbox.ImapHost, StringComparison.Ordinal)) changedFields.Add(nameof(existingMailbox.ImapHost));
+        if (existingMailbox.ImapPort != updatedMailbox.ImapPort) changedFields.Add(nameof(existingMailbox.ImapPort));
+        if (!String.Equals(existingMailbox.MailboxType, updatedMailbox.MailboxType, StringComparison.Ordinal)) changedFields.Add(nameof(existingMailbox.MailboxType));
+        if (!String.Equals(existingMailbox.Security, updatedMailbox.Security, StringComparison.Ordinal)) changedFields.Add(nameof(existingMailbox.Security));
+        if (!String.Equals(existingMailbox.Username, updatedMailbox.Username, StringComparison.Ordinal)) changedFields.Add(nameof(existingMailbox.Username));
+        if (!String.Equals(existingMailbox.InboxFolderPath, updatedMailbox.InboxFolderPath, StringComparison.Ordinal)) changedFields.Add(nameof(existingMailbox.InboxFolderPath));
+        if (!String.Equals(existingMailbox.OutboxFolderPath, updatedMailbox.OutboxFolderPath, StringComparison.Ordinal)) changedFields.Add(nameof(existingMailbox.OutboxFolderPath));
+        if (!String.Equals(existingMailbox.SentFolderPath, updatedMailbox.SentFolderPath, StringComparison.Ordinal)) changedFields.Add(nameof(existingMailbox.SentFolderPath));
+        if (!String.Equals(existingMailbox.ArchiveFolderPath, updatedMailbox.ArchiveFolderPath, StringComparison.Ordinal)) changedFields.Add(nameof(existingMailbox.ArchiveFolderPath));
+        if (!String.Equals(existingMailbox.JunkFolderPath, updatedMailbox.JunkFolderPath, StringComparison.Ordinal)) changedFields.Add(nameof(existingMailbox.JunkFolderPath));
+        if (existingMailbox.PollIntervalSeconds != updatedMailbox.PollIntervalSeconds) changedFields.Add(nameof(existingMailbox.PollIntervalSeconds));
+        if (existingMailbox.DeleteMessage != updatedMailbox.DeleteMessage) changedFields.Add(nameof(existingMailbox.DeleteMessage));
+        if (existingMailbox.IsActive != updatedMailbox.IsActive) changedFields.Add(nameof(existingMailbox.IsActive));
+        if (existingMailbox.SortOrder != updatedMailbox.SortOrder) changedFields.Add(nameof(existingMailbox.SortOrder));
+        if (!String.IsNullOrWhiteSpace(updatedMailbox.Password)) changedFields.Add(nameof(updatedMailbox.Password));
+
+        return changedFields;
+    }
+
+    private sealed class AdminApiLog;
 
     private sealed class JwtInjectingTransformer : HttpTransformer
     {
@@ -435,6 +528,8 @@ public static class Program
             var token = tokenService.CreateToken(user);
 
             proxyRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            proxyRequest.Headers.Remove(CorrelationIdHeaderNames.CorrelationId);
+            proxyRequest.Headers.TryAddWithoutValidation(CorrelationIdHeaderNames.CorrelationId, httpContext.TraceIdentifier);
         }
     }
 }

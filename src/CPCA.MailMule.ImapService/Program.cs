@@ -14,6 +14,7 @@
 
 using CPCA.MailMule;
 using CPCA.MailMule.ImapService.HealthChecks;
+using CPCA.MailMule.ImapService.Middleware;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
@@ -89,6 +90,7 @@ public partial class Program
 
         var app = builder.Build();
 
+        app.UseMiddleware<CorrelationIdMiddleware>();
         app.UseSerilogRequestLogging();
 
         // Configure the HTTP request pipeline.

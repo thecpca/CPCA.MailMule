@@ -14,7 +14,7 @@ When the user clicks one of the routing options, the currently selected message 
 
 The Undo Timer gives the user the chance to change their mind. If they hit the Cancel button for the message, the timer is stopped and the message is moved back to the Inbox. They may alternatively click an "Execute" button which stops the timer and immediately sends a command back to the server to perform the routing action. If the user does not click Cancel or Execute, the timer will elapse and the message will be routed as specified.
 
-If the routing action was "Mark as Spam", then the message is moved to the incoming mailboxe's junk folder. If the routing action is Deliver, the the message is moved to the recipients default folder, probably their Inbox.
+If the routing action was "Mark as Spam", then the message is moved to the incoming mailbox's junk folder. If the routing action is Deliver, the the message is moved to the recipients default folder, probably their Inbox.
 
 IMPORTANT: No operations are executed against the IMAP folders by the server until the timer expires or the user short-circuits the timer by clicking Execute.
 
@@ -121,6 +121,7 @@ MailMule.slnx
 │   ├── CPCA.MailMule.Core                   — Shared cross-cutting primitives and abstractions
 │   ├── CPCA.MailMule.Domain                 — Domain models
 │   ├── CPCA.MailMule.Domain.Shared          — Value objects and enums
+
 │   ├── CPCA.MailMule.Persistence            — EF Core DbContext and persistence implementation
 │   ├── CPCA.MailMule.Persistence.PostgreSql — Npgsql DbContext factory, PostgreSQL migrations, provider wiring
 │   ├── CPCA.MailMule.Backend                — BFF auth, authorization, proxy and configuration API
@@ -140,11 +141,11 @@ MailMule.slnx
 - Remove SQLite-specific projects (`CPCA.MailMule.Persistence.Sqlite`, `CPCA.MailMule.Sqlite`).
 - Keep PostgreSQL as the only database provider for v2.
 
-## [x] Phase 0 — Constraints Document
+## ✅ Phase 0 — Constraints Document
 
 ### Goal
 
-Produce a machine-readable constraints reference and record any SmarterMail-specific IMAP behaviour that must
+Produce a machine-readable constraints reference and record any SmarterMail-specific IMAP behavior that must
 be accounted for during implementation.
 
 ### Deliverable
@@ -161,7 +162,7 @@ be accounted for during implementation.
 
 ---
 
-## [x] Phase 1 — Solution Skeleton
+## ✅ Phase 1 — Solution Skeleton
 
 ### Goal
 
@@ -181,7 +182,7 @@ Scaffold the solution and all projects so that the build is green before any imp
 
 ---
 
-## [x] Phase 2 — Configuration & Admin Backbone
+## ✅ Phase 2 — Configuration & Admin Backbone
 
 ### Goal
 
@@ -232,7 +233,7 @@ from day one.
 
 ---
 
-## [ ] Phase 3 — IMAP Abstraction Layer
+## ✅ Phase 3 — IMAP Abstraction Layer
 
 ### Goal
 
@@ -284,9 +285,9 @@ public interface IStringProtector
 
 ---
 
-## Phase 4 — ImapService
+## [_] Phase 4 — ImapService
 
-### Goal
+###oal
 
 Manage IMAP connections, handle commands and queries for IMAP Mailboxes.
 
@@ -312,7 +313,7 @@ Error     → New       Admin re-queues the message for retry
 
 ---
 
-## Phase 5 — Incoming Sync Worker
+## ✅ Phase 5 — Incoming Sync Worker
 
 ### Goal
 
@@ -336,7 +337,7 @@ Keep the "PostOffice" in-memory projection in sync with the real-time contents o
 
 ---
 
-## Phase 6 — Routing and Junk Workflows
+## ✅ Phase 6 — Routing and Junk Workflows
 
 ### Goal
 
@@ -392,7 +393,7 @@ The undo window is managed in the **web application layer**, not the routing ser
 
 ---
 
-## Phase 7 — Operator Web UI
+## ✅ Phase 7 — Operator Web UI
 
 ### Goal
 
@@ -424,7 +425,7 @@ A clean, fast email-client-like interface. The operator should feel at home imme
 
 ---
 
-## Phase 8 — Authentication & Authorization
+## ✅ Phase 8 — Authentication & Authorization
 
 ### Goal
 
@@ -446,7 +447,7 @@ Replacing the auth provider in future requires:
 
 ---
 
-## Phase 9 — Reliability, Observability & Testing
+## [ ] Phase 9 — Reliability, Observability & Testing
 
 ### Health Checks
 
@@ -479,7 +480,7 @@ See: [END_TO_END_TEST_PLAN.md](END_TO_END_TEST_PLAN.md)
 
 ---
 
-## Phase 10 — Deployment
+## [ ] Phase 10 — Deployment
 
 - Docker Compose on Synology RackStation RS1619xs+, DSM v7.3.x
   - Authentik:latest
@@ -489,14 +490,3 @@ See: [END_TO_END_TEST_PLAN.md](END_TO_END_TEST_PLAN.md)
   - Frontend
 - Local bind mounts instead of Docker Volumes
 - Reverse Proxy in Synology DSM handles SSL termination
-
----
-
-## vNext (Out of Scope for v2)
-
-- Destination search and filtering in the operator UI.
-- Grouping destinations by department/region.
-- Keyboard shortcuts for routing.
-- Auto-suggest routing based on keywords or sender domain.
-- "Spaminess" scoring with auto-route thresholds
-- Multi-operator support with per-message locking.

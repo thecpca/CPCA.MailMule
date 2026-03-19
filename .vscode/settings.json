@@ -6,11 +6,17 @@
     ],
     "cSpell.ignoreWords": [
         "Authentik",
+        "Dtos",
         "Ganss",
         "Npgsql",
+        "Pkce",
         "Spaminess",
         "UIDPLUS",
         "UIDVALIDITY",
+        "Yarp",
+        "backchannel",
+        "connstring",
+        "imapservice",
         "slnx"
     ]
 }
