@@ -48,8 +48,9 @@ public static class Program
         // Auth state comes from BFF, not OIDC
         builder.Services.AddScoped<AuthenticationStateProvider, BffAuthenticationStateProvider>();
         builder.Services.AddAuthorizationCore();
-    // Register API clients
-    builder.Services.AddScoped<MailboxConfigApiClient>();
+        // Register API clients
+        builder.Services.AddScoped<MailboxConfigApiClient>();
+        builder.Services.AddScoped<MessageApiClient>();
 
 
         var app = builder.Build();

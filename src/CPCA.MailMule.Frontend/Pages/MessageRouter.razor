@@ -1,29 +1,222 @@
 @page "/message/router"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
 
 <PageTitle>Message Routing</PageTitle>
 
-<MudText Typo="Typo.h3" GutterBottom="true">Message Routing</MudText>
+<MudStack Spacing="2">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h4">Message Routing</MudText>
+        <MudButton Variant="Variant.Outlined" OnClick="LoadAsync" Disabled="@isLoading">Refresh</MudButton>
+    </MudStack>
 
-<MudStack Row="true">
-    <MudPaper Class="pa-3">
-        <MudPaper>
-            <MudText Typo="Typo.h4">Incoming</MudText>
-            @foreach (var item in Enumerable.Range(1, 10))
-            {
-                <MudText>
-                    {item.Subject}
-                </MudText>
-            }
-        </MudPaper>
-    </MudPaper>
-    <MudPaper>
-        <MudPaper>
-            <MudText Typo="Typo.h4">Message</MudText>
-        </MudPaper>
-    </MudPaper>
-    <MudPaper>
-        <MudPaper>
-            <MudText Typo="Typo.h4">Outgoing</MudText>
-        </MudPaper>
-    </MudPaper>
+    @if (!String.IsNullOrWhiteSpace(statusMessage))
+    {
+        <MudAlert Severity="@statusSeverity">@statusMessage</MudAlert>
+    }
+
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-3">
+                <MudText Typo="Typo.h6" Class="mb-2">Incoming</MudText>
+                @if (headers.Count == 0)
+                {
+                    <MudText Typo="Typo.body2">No messages available.</MudText>
+                }
+                else
+                {
+                    <MudList T="MessageHeader">
+                        @foreach (var header in headers)
+                        {
+                            <MudListItem T="MessageHeader" Value="header" OnClick="@(() => SelectMessageAsync(header))" Class="mb-1">
+                                <MudText Typo="Typo.subtitle2">@header.Subject</MudText>
+                                <MudText Typo="Typo.caption">@FormatFrom(header.From)</MudText>
+                                <MudText Typo="Typo.caption">@header.Date.LocalDateTime</MudText>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-3">
+                <MudText Typo="Typo.h6" Class="mb-2">Message</MudText>
+                @if (selectedHeader == null)
+                {
+                    <MudText Typo="Typo.body2">Select a message to view content.</MudText>
+                }
+                else if (isLoadingMessage)
+                {
+                    <MudProgressCircular Indeterminate="true" />
+                }
+                else
+                {
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">@selectedHeader.Subject</MudText>
+                    <MudText Typo="Typo.caption" Class="mb-2">@FormatFrom(selectedHeader.From)</MudText>
+                    <MudPaper Class="pa-2" Outlined="true" Style="max-height: 460px; overflow: auto; white-space: pre-wrap; font-family: Consolas, monospace;">
+                        @(rawMessage ?? "(Unable to load message body)")
+                    </MudPaper>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="3">
+            <MudPaper Class="pa-3">
+                <MudText Typo="Typo.h6" Class="mb-2">Actions</MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Warning" Disabled="@(selectedHeader == null || isRouting)" OnClick="RouteToJunkAsync" FullWidth="true" Class="mb-2">
+                    Mark as Junk
+                </MudButton>
+
+                <MudDivider Class="my-2" />
+                <MudText Typo="Typo.subtitle2" Class="mb-1">Route To Mailbox</MudText>
+
+                @if (outgoingMailboxes.Count == 0)
+                {
+                    <MudText Typo="Typo.caption">No outgoing mailboxes configured.</MudText>
+                }
+                else
+                {
+                    @foreach (var mailbox in outgoingMailboxes)
+                    {
+                        <MudButton Variant="Variant.Outlined" Disabled="@(selectedHeader == null || isRouting)" OnClick="@(() => RouteToMailboxAsync(mailbox))" FullWidth="true" Class="mb-1">
+                            @mailbox.DisplayName
+                        </MudButton>
+                    }
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
 </MudStack>
+
+@code {
+    [Inject]
+    public MessageApiClient MessageApiClient { get; set; } = default!;
+
+    [Inject]
+    public MailboxConfigApiClient MailboxConfigApiClient { get; set; } = default!;
+
+    private readonly List<MessageHeader> headers = [];
+    private readonly List<MailboxConfigDto> outgoingMailboxes = [];
+
+    private MessageHeader? selectedHeader;
+    private String? rawMessage;
+
+    private Boolean isLoading;
+    private Boolean isLoadingMessage;
+    private Boolean isRouting;
+
+    private String? statusMessage;
+    private Severity statusSeverity = Severity.Info;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        statusMessage = null;
+
+        var loadedHeaders = await MessageApiClient.GetHeadersAsync();
+        var loadedOutgoing = await MailboxConfigApiClient.GetMailboxesByTypeAsync("Outgoing") ?? [];
+
+        headers.Clear();
+        headers.AddRange(loadedHeaders);
+
+        outgoingMailboxes.Clear();
+        outgoingMailboxes.AddRange(loadedOutgoing.Where(x => x.IsActive));
+
+        if (selectedHeader != null)
+        {
+            var stillExists = headers.FirstOrDefault(x => x.Id == selectedHeader.Id);
+            if (stillExists == null)
+            {
+                selectedHeader = null;
+                rawMessage = null;
+            }
+            else
+            {
+                selectedHeader = stillExists;
+            }
+        }
+
+        isLoading = false;
+    }
+
+    private async Task SelectMessageAsync(MessageHeader header)
+    {
+        selectedHeader = header;
+        isLoadingMessage = true;
+        rawMessage = await MessageApiClient.GetRawMessageAsync(header.Id);
+        isLoadingMessage = false;
+    }
+
+    private async Task RouteToJunkAsync()
+    {
+        if (selectedHeader == null)
+        {
+            return;
+        }
+
+        isRouting = true;
+        var success = await MessageApiClient.RouteToJunkAsync(selectedHeader.Id);
+
+        if (success)
+        {
+            statusSeverity = Severity.Success;
+            statusMessage = "Message moved to junk.";
+            await LoadAsync();
+        }
+        else
+        {
+            statusSeverity = Severity.Error;
+            statusMessage = "Failed to move message to junk.";
+        }
+
+        isRouting = false;
+    }
+
+    private async Task RouteToMailboxAsync(MailboxConfigDto destination)
+    {
+        if (selectedHeader == null)
+        {
+            return;
+        }
+
+        isRouting = true;
+        var success = await MessageApiClient.RouteToMailboxAsync(
+            selectedHeader.Id,
+            new MailboxId(ToGuidFromInt64(destination.Id)));
+
+        if (success)
+        {
+            statusSeverity = Severity.Success;
+            statusMessage = $"Message routed to {destination.DisplayName}.";
+            await LoadAsync();
+        }
+        else
+        {
+            statusSeverity = Severity.Error;
+            statusMessage = $"Failed to route message to {destination.DisplayName}.";
+        }
+
+        isRouting = false;
+    }
+
+    private static String FormatFrom(FullEmail from)
+    {
+        var name = String.Join(' ', new[] { from.Name.FirstName, from.Name.LastName }.Where(x => !String.IsNullOrWhiteSpace(x)));
+        return String.IsNullOrWhiteSpace(name)
+            ? from.Email.Value
+            : $"{name} <{from.Email.Value}>";
+    }
+
+    private static Guid ToGuidFromInt64(Int64 value)
+    {
+        Span<byte> bytes = stackalloc byte[16];
+        BitConverter.TryWriteBytes(bytes, value);
+        return new Guid(bytes);
+    }
+}

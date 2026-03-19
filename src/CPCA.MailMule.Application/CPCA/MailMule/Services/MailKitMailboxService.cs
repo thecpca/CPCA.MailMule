@@ -42,32 +42,66 @@ internal sealed class MailKitMailboxService(
 
     public async Task<MimeMessage> GetMessageAsync(MessageId messageId, CancellationToken cancellationToken = default)
     {
-        var mailboxEntityId = FromMailboxId(messageId.Mailbox);
-
-        var mailbox = await mailboxConfigRepository.GetByIdAsync(mailboxEntityId, cancellationToken)
-            ?? throw new KeyNotFoundException($"Mailbox with ID {mailboxEntityId} was not found.");
+        var mailbox = await this.GetIncomingMailboxByMessageIdAsync(messageId, cancellationToken);
 
         using var client = await ConnectAsync(mailbox, cancellationToken);
-        var sourceFolder = await OpenSourceFolderAsync(client, mailbox, cancellationToken);
+        var sourceFolder = await OpenSourceFolderAsync(client, mailbox, FolderAccess.ReadOnly, cancellationToken);
 
         var uniqueId = new UniqueId(messageId.Uid);
         return await sourceFolder.GetMessageAsync(uniqueId, cancellationToken);
     }
 
-    public Task RouteToJunkAsync(MessageId messageId, CancellationToken cancellationToken = default)
+    public async Task RouteToJunkAsync(MessageId messageId, CancellationToken cancellationToken = default)
     {
-        throw new NotSupportedException("RouteToJunkAsync will be implemented in the next IMAP routing slice.");
+        var sourceMailbox = await this.GetIncomingMailboxByMessageIdAsync(messageId, cancellationToken);
+
+        if (String.IsNullOrWhiteSpace(sourceMailbox.TrashFolderPath))
+        {
+            throw new InvalidOperationException("Junk folder path is not configured for the source mailbox.");
+        }
+
+        using var sourceClient = await ConnectAsync(sourceMailbox, cancellationToken);
+        var sourceFolder = await OpenSourceFolderAsync(sourceClient, sourceMailbox, FolderAccess.ReadWrite, cancellationToken);
+        var junkFolder = await sourceClient.GetFolderAsync(sourceMailbox.TrashFolderPath, cancellationToken);
+
+        var uid = new UniqueId(messageId.Uid);
+        await sourceFolder.MoveToAsync(uid, junkFolder, cancellationToken);
+
+        logger.LogInformation("Moved message {MessageUid} from mailbox {MailboxId} to junk folder.", messageId.Uid, sourceMailbox.Id);
     }
 
-    public Task RouteToMailboxAsync(MessageId messageId, MailboxId mailboxId, CancellationToken cancellationToken = default)
+    public async Task RouteToMailboxAsync(MessageId messageId, MailboxId mailboxId, CancellationToken cancellationToken = default)
     {
-        throw new NotSupportedException("RouteToMailboxAsync will be implemented in the next IMAP routing slice.");
+        var sourceMailbox = await this.GetIncomingMailboxByMessageIdAsync(messageId, cancellationToken);
+        var destinationMailbox = await this.GetOutgoingMailboxByIdAsync(mailboxId, cancellationToken);
+
+        using var sourceClient = await ConnectAsync(sourceMailbox, cancellationToken);
+        var sourceFolder = await OpenSourceFolderAsync(sourceClient, sourceMailbox, FolderAccess.ReadWrite, cancellationToken);
+        var uid = new UniqueId(messageId.Uid);
+
+        // Read from source then append to destination (cross-account move semantics).
+        var message = await sourceFolder.GetMessageAsync(uid, cancellationToken);
+
+        using var destinationClient = await ConnectAsync(destinationMailbox, cancellationToken);
+        var destinationFolder = String.IsNullOrWhiteSpace(destinationMailbox.OutboxFolderPath)
+            ? destinationClient.Inbox
+            : await destinationClient.GetFolderAsync(destinationMailbox.OutboxFolderPath, cancellationToken);
+
+        await destinationFolder.AppendAsync(new AppendRequest(message), cancellationToken);
+
+        await this.RemoveFromSourceMailboxAsync(sourceFolder, sourceClient, sourceMailbox, uid, cancellationToken);
+
+        logger.LogInformation(
+            "Routed message {MessageUid} from source mailbox {SourceMailboxId} to destination mailbox {DestinationMailboxId}.",
+            messageId.Uid,
+            sourceMailbox.Id,
+            destinationMailbox.Id);
     }
 
     private async Task<IReadOnlyList<MessageHeader>> GetMailboxHeadersAsync(MailboxConfig mailbox, CancellationToken cancellationToken)
     {
         using var client = await ConnectAsync(mailbox, cancellationToken);
-        var sourceFolder = await OpenSourceFolderAsync(client, mailbox, cancellationToken);
+        var sourceFolder = await OpenSourceFolderAsync(client, mailbox, FolderAccess.ReadOnly, cancellationToken);
 
         var allUids = await sourceFolder.SearchAsync(SearchQuery.All, cancellationToken);
         var limitedUids = allUids.TakeLast(MaxHeadersPerMailbox).ToList();
@@ -107,15 +141,82 @@ internal sealed class MailKitMailboxService(
         return client;
     }
 
-    private static async Task<IMailFolder> OpenSourceFolderAsync(ImapClient client, MailboxConfig mailbox, CancellationToken cancellationToken)
+    private static async Task<IMailFolder> OpenSourceFolderAsync(ImapClient client, MailboxConfig mailbox, FolderAccess access, CancellationToken cancellationToken)
     {
         var folder = String.IsNullOrWhiteSpace(mailbox.InboxFolderPath)
             ? client.Inbox
             : await client.GetFolderAsync(mailbox.InboxFolderPath, cancellationToken);
 
-        await folder.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
+        await folder.OpenAsync(access, cancellationToken);
 
         return folder;
+    }
+
+    private async Task<MailboxConfig> GetIncomingMailboxByMessageIdAsync(MessageId messageId, CancellationToken cancellationToken)
+    {
+        var mailboxEntityId = FromMailboxId(messageId.Mailbox);
+        var mailbox = await mailboxConfigRepository.GetByIdAsync(mailboxEntityId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Mailbox with ID {mailboxEntityId} was not found.");
+
+        if (!mailbox.IsActive)
+        {
+            throw new InvalidOperationException($"Mailbox with ID {mailboxEntityId} is inactive.");
+        }
+
+        if (mailbox.MailboxType != MailboxType.Incoming)
+        {
+            throw new InvalidOperationException($"Mailbox with ID {mailboxEntityId} is not an incoming mailbox.");
+        }
+
+        return mailbox;
+    }
+
+    private async Task<MailboxConfig> GetOutgoingMailboxByIdAsync(MailboxId mailboxId, CancellationToken cancellationToken)
+    {
+        var mailboxEntityId = FromMailboxId(mailboxId);
+        var mailbox = await mailboxConfigRepository.GetByIdAsync(mailboxEntityId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Mailbox with ID {mailboxEntityId} was not found.");
+
+        if (!mailbox.IsActive)
+        {
+            throw new InvalidOperationException($"Mailbox with ID {mailboxEntityId} is inactive.");
+        }
+
+        if (mailbox.MailboxType != MailboxType.Outgoing)
+        {
+            throw new InvalidOperationException($"Mailbox with ID {mailboxEntityId} is not an outgoing mailbox.");
+        }
+
+        return mailbox;
+    }
+
+    private async Task RemoveFromSourceMailboxAsync(
+        IMailFolder sourceFolder,
+        ImapClient sourceClient,
+        MailboxConfig sourceMailbox,
+        UniqueId uid,
+        CancellationToken cancellationToken)
+    {
+        if (sourceMailbox.DeleteMessage)
+        {
+            await sourceFolder.AddFlagsAsync(uid, MessageFlags.Deleted, true, cancellationToken);
+            await sourceFolder.ExpungeAsync(cancellationToken);
+            return;
+        }
+
+        if (!String.IsNullOrWhiteSpace(sourceMailbox.TrashFolderPath))
+        {
+            var archiveFolder = await sourceClient.GetFolderAsync(sourceMailbox.TrashFolderPath, cancellationToken);
+            await sourceFolder.MoveToAsync(uid, archiveFolder, cancellationToken);
+            return;
+        }
+
+        logger.LogWarning(
+            "DeleteMessage is false but no archive path is configured for source mailbox {MailboxId}; deleting message as fallback.",
+            sourceMailbox.Id);
+
+        await sourceFolder.AddFlagsAsync(uid, MessageFlags.Deleted, true, cancellationToken);
+        await sourceFolder.ExpungeAsync(cancellationToken);
     }
 
     private static SecureSocketOptions ParseSecurity(String security)
