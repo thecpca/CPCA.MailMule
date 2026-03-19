@@ -1,0 +1,213 @@
+@using CPCA.MailMule.Dtos
+@using CPCA.MailMule.Frontend.Services
+
+<MudForm @ref="form" @bind-IsValid="@isFormValid">
+    <MudStack Spacing="2">
+        <MudTextField @bind-Value="formData.DisplayName" Label="Display Name" Required="true" 
+            Variant="Variant.Outlined" HelperText="Unique identifier for this mailbox" />
+        
+        <MudTextField @bind-Value="formData.ImapHost" Label="IMAP Host" Required="true" 
+            Variant="Variant.Outlined" HelperText="e.g., imap.gmail.com" />
+        
+        <MudNumericField @bind-Value="formData.ImapPort" Label="Port" 
+            Variant="Variant.Outlined" Min="1" Max="65535" HelperText="Usually 993 for IMAP" />
+        
+        <MudSelect @bind-Value="formData.Security" Label="Security" T="String" AnchorOrigin="Origin.BottomCenter">
+            <MudSelectItem Value="@("SSL")">SSL/TLS</MudSelectItem>
+            <MudSelectItem Value="@("STARTTLS")">STARTTLS</MudSelectItem>
+            <MudSelectItem Value="@("Auto")">Auto-detect</MudSelectItem>
+        </MudSelect>
+        
+        <MudTextField @bind-Value="formData.Username" Label="Username" Required="true"
+            Variant="Variant.Outlined" HelperText="Email address or username" />
+        
+        <MudTextField @bind-Value="formData.Password" Label="Password" InputType="InputType.Password"
+            Variant="Variant.Outlined" 
+            HelperText="@(IsEditing ? "Leave blank to keep existing password" : "Required for new mailbox")" />
+        
+        <MudButton Variant="Variant.Outlined" OnClick="@TestConnection">Test Connection</MudButton>
+        @if (!string.IsNullOrEmpty(ConnectionTestMessage))
+        {
+            <MudAlert Severity="@(ConnectionTestSuccess ? Severity.Success : Severity.Error)">
+                @ConnectionTestMessage
+            </MudAlert>
+        }
+
+        <MudExpansionPanel Text="Advanced Settings">
+            <MudStack Spacing="2">
+                <MudTextField @bind-Value="formData.InboxFolderPath" Label="Inbox Folder Path" 
+                    Variant="Variant.Outlined" HelperText="Leave empty for default" />
+                
+                <MudTextField @bind-Value="formData.OutboxFolderPath" Label="Outbox Folder Path" 
+                    Variant="Variant.Outlined" HelperText="Leave empty for default" />
+                
+                <MudTextField @bind-Value="formData.SentFolderPath" Label="Sent Folder Path" 
+                    Variant="Variant.Outlined" HelperText="Leave empty for default" />
+                
+                <MudTextField @bind-Value="formData.TrashFolderPath" Label="Trash Folder Path" 
+                    Variant="Variant.Outlined" HelperText="Leave empty for default" />
+
+                <MudNumericField @bind-Value="formData.PollIntervalSeconds" Label="Polling Interval (seconds)" 
+                    Variant="Variant.Outlined" Min="10" Max="3600" HelperText="How often to check for new messages" />
+
+                <MudCheckBox T="Boolean" @bind-Checked="formData.DeleteMessage" Label="Delete message after fetching" />
+                
+                <MudCheckBox T="Boolean" @bind-Checked="formData.IsActive" Label="Active" />
+
+                <MudNumericField @bind-Value="formData.SortOrder" Label="Sort Order" 
+                    Variant="Variant.Outlined" HelperText="Display order in list" />
+            </MudStack>
+        </MudExpansionPanel>
+
+        <MudStack Row="true" Class="mt-4">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                Disabled="@(!isFormValid || IsSaving)" OnClick="@(async () => await OnSubmit())" Class="flex-grow-1">
+                @(IsSaving ? "Saving..." : (IsEditing ? "Update" : "Create"))
+            </MudButton>
+            <MudButton Variant="Variant.Text" OnClick="@OnCancel">Cancel</MudButton>
+        </MudStack>
+    </MudStack>
+</MudForm>
+
+@code {
+    private MudForm? form;
+    private bool isFormValid;
+    private string? ConnectionTestMessage;
+    private bool ConnectionTestSuccess;
+    private FormData formData = new();
+
+    private class FormData
+    {
+        public string DisplayName { get; set; } = "";
+        public string ImapHost { get; set; } = "";
+        public int ImapPort { get; set; } = 993;
+        public string Security { get; set; } = "Auto";
+        public string Username { get; set; } = "";
+        public string? Password { get; set; }
+        public string? InboxFolderPath { get; set; }
+        public string? OutboxFolderPath { get; set; }
+        public string? SentFolderPath { get; set; }
+        public string? TrashFolderPath { get; set; }
+        public int PollIntervalSeconds { get; set; } = 300;
+        public bool DeleteMessage { get; set; }
+        public bool IsActive { get; set; } = true;
+        public int SortOrder { get; set; }
+    }
+
+    [Parameter]
+    public bool IsEditing { get; set; }
+
+    [Parameter]
+    public CreateMailboxConfigDto Request { get; set; } = new(
+        DisplayName: "",
+        ImapHost: "",
+        ImapPort: 993,
+        MailboxType: "Incoming",
+        Security: "Auto",
+        Username: "",
+        Password: "",
+        InboxFolderPath: null,
+        OutboxFolderPath: null,
+        SentFolderPath: null,
+        TrashFolderPath: null,
+        PollIntervalSeconds: 300,
+        DeleteMessage: false,
+        IsActive: true,
+        SortOrder: 0
+    );
+
+    [Parameter]
+    public EventCallback<CreateMailboxConfigDto> OnSubmitCallback { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancelCallback { get; set; }
+
+    public bool IsSaving { get; set; }
+
+    [Inject]
+    public MailboxConfigApiClient? ApiClient { get; set; }
+
+    [Inject]
+    public ISnackbar? Snackbar { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        // Initialize form data from Request parameter
+        formData.DisplayName = Request.DisplayName ?? "";
+        formData.ImapHost = Request.ImapHost ?? "";
+        formData.ImapPort = Request.ImapPort;
+        formData.Security = Request.Security ?? "Auto";
+        formData.Username = Request.Username ?? "";
+        formData.Password = Request.Password;
+        formData.InboxFolderPath = Request.InboxFolderPath;
+        formData.OutboxFolderPath = Request.OutboxFolderPath;
+        formData.SentFolderPath = Request.SentFolderPath;
+        formData.TrashFolderPath = Request.TrashFolderPath;
+        formData.PollIntervalSeconds = Request.PollIntervalSeconds;
+        formData.DeleteMessage = Request.DeleteMessage;
+        formData.IsActive = Request.IsActive;
+        formData.SortOrder = Request.SortOrder;
+    }
+
+    private async Task TestConnection()
+    {
+        if (ApiClient == null) return;
+
+        var testRequest = new MailboxConnectionTestRequest(
+            ImapHost: formData.ImapHost,
+            ImapPort: formData.ImapPort,
+            Security: formData.Security,
+            Username: formData.Username,
+            Password: formData.Password ?? ""
+        );
+
+        var result = await ApiClient.TestConnectionAsync(testRequest, "Incoming");
+        
+        if (result == null)
+        {
+            ConnectionTestMessage = "Connection test failed";
+            ConnectionTestSuccess = false;
+        }
+        else
+        {
+            ConnectionTestMessage = result.Message ?? (result.Success ? "Connection successful!" : "Connection failed");
+            ConnectionTestSuccess = result.Success;
+        }
+    }
+
+    private async Task OnSubmit()
+    {
+        if (form != null)
+        {
+            await form.Validate();
+        }
+
+        if (!isFormValid) return;
+
+        IsSaving = true;
+        var updatedRequest = new CreateMailboxConfigDto(
+            DisplayName: formData.DisplayName,
+            ImapHost: formData.ImapHost,
+            ImapPort: formData.ImapPort,
+            MailboxType: Request.MailboxType,
+            Security: formData.Security,
+            Username: formData.Username,
+            Password: formData.Password ?? "",
+            InboxFolderPath: formData.InboxFolderPath,
+            OutboxFolderPath: formData.OutboxFolderPath,
+            SentFolderPath: formData.SentFolderPath,
+            TrashFolderPath: formData.TrashFolderPath,
+            PollIntervalSeconds: formData.PollIntervalSeconds,
+            DeleteMessage: formData.DeleteMessage,
+            IsActive: formData.IsActive,
+            SortOrder: formData.SortOrder
+        );
+        await OnSubmitCallback.InvokeAsync(updatedRequest);
+        IsSaving = false;
+    }
+
+    private async Task OnCancel()
+    {
+        await OnCancelCallback.InvokeAsync();
+    }    
+}

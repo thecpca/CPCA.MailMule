@@ -1,0 +1,66 @@
+@using CPCA.MailMule.Dtos
+@using CPCA.MailMule.Frontend.Services
+
+<MudStack Spacing="3">
+    @if (Mailboxes == null)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (!Mailboxes.Any())
+    {
+        <MudAlert Severity="Severity.Info">
+            No mailboxes configured yet. <MudLink Href="#" onclick="@(async () => await OnCreateClick.InvokeAsync())" Color="Color.Primary">Create one</MudLink>
+        </MudAlert>
+    }
+    else
+    {
+        <MudTable Items="@Mailboxes" Hover="true" CanCancelEdit="true" Striped="true">
+            <HeaderContent>
+                <MudTh>Display Name</MudTh>
+                <MudTh>IMAP Host</MudTh>
+                <MudTh>Port</MudTh>
+                <MudTh>Username</MudTh>
+                <MudTh>Polling</MudTh>
+                <MudTh>Active</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate Context="mailbox">
+                <MudTd>@mailbox.DisplayName</MudTd>
+                <MudTd>@mailbox.ImapHost</MudTd>
+                <MudTd>@mailbox.ImapPort</MudTd>
+                <MudTd>@mailbox.Username</MudTd>
+                <MudTd>@mailbox.PollIntervalSeconds sec</MudTd>
+                <MudTd>
+                    @if (mailbox.IsActive)
+                    {
+                        <MudChip T="String" Color="Color.Success" Size="Size.Small">Online</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="String" Color="Color.Default" Size="Size.Small">Offline</MudChip>
+                    }
+                </MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" 
+                        OnClick="@(async () => await OnEditClick.InvokeAsync(mailbox))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                        OnClick="@(async () => await OnDeleteClick.InvokeAsync(mailbox.Id))" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudStack>
+
+@code {
+    [Parameter]
+    public IEnumerable<MailboxConfigDto>? Mailboxes { get; set; }
+
+    [Parameter]
+    public EventCallback OnCreateClick { get; set; }
+
+    [Parameter]
+    public EventCallback<MailboxConfigDto> OnEditClick { get; set; }
+
+    [Parameter]
+    public EventCallback<Int64> OnDeleteClick { get; set; }
+}

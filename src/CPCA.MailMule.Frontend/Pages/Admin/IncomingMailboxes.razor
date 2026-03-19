@@ -1,0 +1,219 @@
+@using MudBlazor
+@using Microsoft.AspNetCore.Authorization
+@page "/admin/incoming"
+@using CPCA.MailMule.Dtos
+@using CPCA.MailMule.Frontend.Services
+@attribute [Authorize]
+
+<PageTitle>Incoming Mailbox Configuration</PageTitle>
+
+<MudStack Spacing="3">
+    <MudText Typo="Typo.h4">Incoming Mailbox Configuration</MudText>
+    
+    @if (ShowForm)
+    {
+        <MudPaper Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-4">
+                @(EditingMailbox != null ? "Edit Mailbox" : "Create New Mailbox")
+            </MudText>
+            
+            <MailboxConfigForm @ref="formComponent"
+                IsEditing="@(EditingMailbox != null)"
+                Request="@CurrentFormData"
+                OnSubmitCallback="@HandleFormSubmit"
+                OnCancelCallback="@HandleFormCancel" />
+        </MudPaper>
+    }
+    else
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@OpenCreateForm">
+            <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-2" />
+            Add Incoming Mailbox
+        </MudButton>
+
+        <MailboxConfigList 
+            Mailboxes="@Mailboxes"
+            OnCreateClick="@OpenCreateForm"
+            OnEditClick="@OpenEditForm"
+            OnDeleteClick="@HandleDelete" />
+    }
+</MudStack>
+
+@code {
+    private IEnumerable<MailboxConfigDto>? Mailboxes;
+    private MailboxConfigForm? formComponent;
+    private bool ShowForm;
+    private MailboxConfigDto? EditingMailbox;
+    private CreateMailboxConfigDto CurrentFormData = new(
+        DisplayName: "",
+        ImapHost: "",
+        ImapPort: 993,
+        MailboxType: "Incoming",
+        Security: "Auto",
+        Username: "",
+        Password: "",
+        InboxFolderPath: null,
+        OutboxFolderPath: null,
+        SentFolderPath: null,
+        TrashFolderPath: null,
+        PollIntervalSeconds: 300,
+        DeleteMessage: false,
+        IsActive: true,
+        SortOrder: 0
+    );
+
+    [Inject]
+    public MailboxConfigApiClient? ApiClient { get; set; }
+
+    [Inject]
+    public ISnackbar? Snackbar { get; set; }
+
+    [Inject]
+    public IDialogService? DialogService { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMailboxes();
+    }
+
+    private async Task LoadMailboxes()
+    {
+        if (ApiClient == null) return;
+        Mailboxes = await ApiClient.GetMailboxesByTypeAsync("Incoming") ?? new List<MailboxConfigDto>();
+    }
+
+    private void OpenCreateForm()
+    {
+        CurrentFormData = new(
+            DisplayName: "",
+            ImapHost: "",
+            ImapPort: 993,
+            MailboxType: "Incoming",
+            Security: "Auto",
+            Username: "",
+            Password: "",
+            InboxFolderPath: null,
+            OutboxFolderPath: null,
+            SentFolderPath: null,
+            TrashFolderPath: null,
+            PollIntervalSeconds: 300,
+            DeleteMessage: false,
+            IsActive: true,
+            SortOrder: 0
+        );
+        EditingMailbox = null;
+        ShowForm = true;
+    }
+
+    private void OpenEditForm(MailboxConfigDto mailbox)
+    {
+        EditingMailbox = mailbox;
+        CurrentFormData = new(
+            DisplayName: mailbox.DisplayName,
+            ImapHost: mailbox.ImapHost,
+            ImapPort: mailbox.ImapPort,
+            MailboxType: mailbox.MailboxType,
+            Security: mailbox.Security,
+            Username: mailbox.Username,
+            Password: "",
+            InboxFolderPath: mailbox.InboxFolderPath,
+            OutboxFolderPath: mailbox.OutboxFolderPath,
+            SentFolderPath: mailbox.SentFolderPath,
+            TrashFolderPath: mailbox.TrashFolderPath,
+            PollIntervalSeconds: mailbox.PollIntervalSeconds,
+            DeleteMessage: mailbox.DeleteMessage,
+            IsActive: mailbox.IsActive,
+            SortOrder: mailbox.SortOrder
+        );
+        ShowForm = true;
+    }
+
+    private async Task HandleFormSubmit(CreateMailboxConfigDto request)
+    {
+        if (ApiClient == null || Snackbar == null) return;
+
+        try
+        {
+            bool success;
+            if (EditingMailbox != null)
+            {
+                // Update existing
+                var updateDto = new UpdateMailboxConfigDto(
+                    Id: EditingMailbox.Id,
+                    DisplayName: request.DisplayName,
+                    ImapHost: request.ImapHost,
+                    ImapPort: request.ImapPort,
+                    MailboxType: request.MailboxType,
+                    Security: request.Security,
+                    Username: request.Username,
+                    Password: String.IsNullOrEmpty(request.Password) ? null : request.Password,
+                    InboxFolderPath: request.InboxFolderPath,
+                    OutboxFolderPath: request.OutboxFolderPath,
+                    SentFolderPath: request.SentFolderPath,
+                    TrashFolderPath: request.TrashFolderPath,
+                    PollIntervalSeconds: request.PollIntervalSeconds,
+                    DeleteMessage: request.DeleteMessage,
+                    IsActive: request.IsActive,
+                    SortOrder: request.SortOrder
+                );
+                success = await ApiClient.UpdateMailboxAsync(updateDto, "Incoming");
+            }
+            else
+            {
+                // Create new
+                success = await ApiClient.CreateMailboxAsync(request, "Incoming");
+            }
+
+            if (success)
+            {
+                Snackbar.Add(EditingMailbox != null ? "Mailbox updated successfully" : "Mailbox created successfully", Severity.Success);
+                ShowForm = false;
+                await LoadMailboxes();
+            }
+            else
+            {
+                Snackbar.Add("Failed to save mailbox", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar?.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void HandleFormCancel()
+    {
+        ShowForm = false;
+        EditingMailbox = null;
+    }
+
+    private async Task HandleDelete(Int64 id)
+    {
+        if (DialogService == null || ApiClient == null || Snackbar == null) return;
+
+        var parameters = new DialogParameters
+        {
+            { "ContentText", "Are you sure you want to delete this mailbox configuration? This action cannot be undone." },
+            { "YesText", "Delete" },
+            { "NoText", "Cancel" },
+            { "YesButtonColor", Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<MudMessageBox>("Confirm Delete", parameters);
+        var result = await dialog.Result;
+
+        if (result?.Canceled != true)
+        {
+            var success = await ApiClient.DeleteMailboxAsync(id, "Incoming");
+            if (success)
+            {
+                Snackbar.Add("Mailbox deleted successfully", Severity.Success);
+                await LoadMailboxes();
+            }
+            else
+            {
+                Snackbar.Add("Failed to delete mailbox", Severity.Error);
+            }
+        }
+    }
+}
