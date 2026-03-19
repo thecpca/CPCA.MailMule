@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,6 +13,8 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configureDb);
 
+        services.AddDataProtection();
+        services.AddSingleton<IStringProtector, DataProtectionStringProtector>();
         services.AddDbContext<MailMuleDbContext>(configureDb);
 
         return services;

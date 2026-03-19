@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="10.0.5" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.8" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\CPCA.MailMule.Core\CPCA.MailMule.Core.csproj" />
     <ProjectReference Include="..\CPCA.MailMule.Domain\CPCA.MailMule.Domain.csproj" />
   </ItemGroup>
   <PropertyGroup>
