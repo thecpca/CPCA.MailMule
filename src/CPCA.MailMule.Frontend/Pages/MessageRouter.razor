@@ -1,6 +1,7 @@
 @page "/message/router"
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
+@implements IDisposable
 
 <PageTitle>Message Routing</PageTitle>
 
@@ -64,7 +65,7 @@
         <MudItem xs="12" md="3">
             <MudPaper Class="pa-3">
                 <MudText Typo="Typo.h6" Class="mb-2">Actions</MudText>
-                <MudButton Variant="Variant.Filled" Color="Color.Warning" Disabled="@(selectedHeader == null || isRouting)" OnClick="RouteToJunkAsync" FullWidth="true" Class="mb-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Warning" Disabled="@(selectedHeader == null)" OnClick="QueueJunkAsync" FullWidth="true" Class="mb-2">
                     Mark as Junk
                 </MudButton>
 
@@ -79,9 +80,34 @@
                 {
                     @foreach (var mailbox in outgoingMailboxes)
                     {
-                        <MudButton Variant="Variant.Outlined" Disabled="@(selectedHeader == null || isRouting)" OnClick="@(() => RouteToMailboxAsync(mailbox))" FullWidth="true" Class="mb-1">
+                        <MudButton Variant="Variant.Outlined" Disabled="@(selectedHeader == null)" OnClick="@(() => QueueRouteToMailboxAsync(mailbox))" FullWidth="true" Class="mb-1">
                             @mailbox.DisplayName
                         </MudButton>
+                    }
+                }
+
+                <MudDivider Class="my-2" />
+                <MudText Typo="Typo.subtitle2" Class="mb-1">Outbox Queue</MudText>
+
+                @if (pendingRoutes.Count == 0)
+                {
+                    <MudText Typo="Typo.caption">No pending routes.</MudText>
+                }
+                else
+                {
+                    @foreach (var pending in pendingRoutes)
+                    {
+                        <MudPaper Class="pa-2 mb-2" Outlined="true">
+                            <MudText Typo="Typo.caption">@pending.Header.Subject</MudText>
+                            <MudText Typo="Typo.caption">
+                                @(pending.ActionType == PendingActionType.Junk ? "Junk" : $"Route: {pending.DestinationName}")
+                            </MudText>
+                            <MudText Typo="Typo.caption">Undo: @pending.RemainingSeconds s</MudText>
+                            <MudStack Row="true" Spacing="1" Class="mt-1">
+                                <MudButton Variant="Variant.Text" Color="Color.Error" Disabled="@pending.IsExecuting" OnClick="@(() => CancelPending(pending.Id))">Cancel</MudButton>
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" Disabled="@pending.IsExecuting" OnClick="@(() => ExecuteNowAsync(pending.Id))">Execute</MudButton>
+                            </MudStack>
+                        </MudPaper>
                     }
                 }
             </MudPaper>
@@ -98,20 +124,23 @@
 
     private readonly List<MessageHeader> headers = [];
     private readonly List<MailboxConfigDto> outgoingMailboxes = [];
+    private readonly List<PendingRoute> pendingRoutes = [];
+    private readonly CancellationTokenSource timerCts = new();
 
     private MessageHeader? selectedHeader;
     private String? rawMessage;
 
     private Boolean isLoading;
     private Boolean isLoadingMessage;
-    private Boolean isRouting;
 
     private String? statusMessage;
     private Severity statusSeverity = Severity.Info;
+    private const Int32 UndoWindowSeconds = 15;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+        _ = Task.Run(() => RunPendingQueueAsync(timerCts.Token));
     }
 
     private async Task LoadAsync()
@@ -153,56 +182,150 @@
         isLoadingMessage = false;
     }
 
-    private async Task RouteToJunkAsync()
+    private Task QueueJunkAsync()
     {
         if (selectedHeader == null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        isRouting = true;
-        var success = await MessageApiClient.RouteToJunkAsync(selectedHeader.Id);
-
-        if (success)
-        {
-            statusSeverity = Severity.Success;
-            statusMessage = "Message moved to junk.";
-            await LoadAsync();
-        }
-        else
-        {
-            statusSeverity = Severity.Error;
-            statusMessage = "Failed to move message to junk.";
-        }
-
-        isRouting = false;
+        QueuePending(selectedHeader, PendingActionType.Junk, null);
+        return Task.CompletedTask;
     }
 
-    private async Task RouteToMailboxAsync(MailboxConfigDto destination)
+    private Task QueueRouteToMailboxAsync(MailboxConfigDto destination)
     {
         if (selectedHeader == null)
+        {
+            return Task.CompletedTask;
+        }
+
+        QueuePending(selectedHeader, PendingActionType.Mailbox, destination);
+        return Task.CompletedTask;
+    }
+
+    private void QueuePending(MessageHeader header, PendingActionType actionType, MailboxConfigDto? destination)
+    {
+        var pending = new PendingRoute(
+            Guid.NewGuid(),
+            header,
+            actionType,
+            destination?.DisplayName,
+            destination == null ? null : new MailboxId(ToGuidFromInt64(destination.Id)),
+            DateTimeOffset.UtcNow.AddSeconds(UndoWindowSeconds));
+
+        pendingRoutes.Insert(0, pending);
+
+        headers.RemoveAll(x => x.Id == header.Id);
+
+        if (selectedHeader?.Id == header.Id)
+        {
+            selectedHeader = headers.FirstOrDefault();
+            rawMessage = null;
+        }
+
+        statusSeverity = Severity.Info;
+        statusMessage = actionType == PendingActionType.Junk
+            ? "Message queued for junk. Undo timer started."
+            : $"Message queued for routing to {destination?.DisplayName}. Undo timer started.";
+    }
+
+    private void CancelPending(Guid pendingId)
+    {
+        var pending = pendingRoutes.FirstOrDefault(x => x.Id == pendingId);
+        if (pending == null || pending.IsExecuting)
         {
             return;
         }
 
-        isRouting = true;
-        var success = await MessageApiClient.RouteToMailboxAsync(
-            selectedHeader.Id,
-            new MailboxId(ToGuidFromInt64(destination.Id)));
+        pendingRoutes.Remove(pending);
+        headers.Add(pending.Header);
+        headers.Sort((a, b) => b.Date.CompareTo(a.Date));
+
+        statusSeverity = Severity.Info;
+        statusMessage = "Queued route canceled and message returned to inbox.";
+    }
+
+    private async Task ExecuteNowAsync(Guid pendingId)
+    {
+        var pending = pendingRoutes.FirstOrDefault(x => x.Id == pendingId);
+        if (pending == null)
+        {
+            return;
+        }
+
+        await ExecutePendingAsync(pending);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RunPendingQueueAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+
+        while (await timer.WaitForNextTickAsync(cancellationToken))
+        {
+            await InvokeAsync(async () =>
+            {
+                var due = pendingRoutes
+                    .Where(x => !x.IsExecuting && x.ExecuteAtUtc <= DateTimeOffset.UtcNow)
+                    .ToList();
+
+                foreach (var pending in due)
+                {
+                    await ExecutePendingAsync(pending);
+                }
+
+                StateHasChanged();
+            });
+        }
+    }
+
+    private async Task ExecutePendingAsync(PendingRoute pending)
+    {
+        if (pending.IsExecuting)
+        {
+            return;
+        }
+
+        pending.IsExecuting = true;
+        Boolean success;
+
+        if (pending.ActionType == PendingActionType.Junk)
+        {
+            success = await MessageApiClient.RouteToJunkAsync(pending.Header.Id);
+        }
+        else
+        {
+            if (pending.DestinationMailboxId == null)
+            {
+                success = false;
+            }
+            else
+            {
+                success = await MessageApiClient.RouteToMailboxAsync(pending.Header.Id, pending.DestinationMailboxId.Value);
+            }
+        }
 
         if (success)
         {
             statusSeverity = Severity.Success;
-            statusMessage = $"Message routed to {destination.DisplayName}.";
-            await LoadAsync();
+            statusMessage = pending.ActionType == PendingActionType.Junk
+                ? "Message moved to junk."
+                : $"Message routed to {pending.DestinationName}.";
+
+            pendingRoutes.Remove(pending);
         }
         else
         {
             statusSeverity = Severity.Error;
-            statusMessage = $"Failed to route message to {destination.DisplayName}.";
-        }
+            statusMessage = pending.ActionType == PendingActionType.Junk
+                ? "Failed to move message to junk. Message returned to inbox."
+                : $"Failed to route message to {pending.DestinationName}. Message returned to inbox.";
 
-        isRouting = false;
+            pendingRoutes.Remove(pending);
+            headers.Add(pending.Header);
+            headers.Sort((a, b) => b.Date.CompareTo(a.Date));
+        }
     }
 
     private static String FormatFrom(FullEmail from)
@@ -218,5 +341,53 @@
         Span<byte> bytes = stackalloc byte[16];
         BitConverter.TryWriteBytes(bytes, value);
         return new Guid(bytes);
+    }
+
+    public void Dispose()
+    {
+        timerCts.Cancel();
+        timerCts.Dispose();
+    }
+
+    private enum PendingActionType
+    {
+        Junk,
+        Mailbox,
+    }
+
+    private sealed class PendingRoute
+    {
+        public PendingRoute(
+            Guid id,
+            MessageHeader header,
+            PendingActionType actionType,
+            String? destinationName,
+            MailboxId? destinationMailboxId,
+            DateTimeOffset executeAtUtc)
+        {
+            Id = id;
+            Header = header;
+            ActionType = actionType;
+            DestinationName = destinationName;
+            DestinationMailboxId = destinationMailboxId;
+            ExecuteAtUtc = executeAtUtc;
+        }
+
+        public Guid Id { get; }
+        public MessageHeader Header { get; }
+        public PendingActionType ActionType { get; }
+        public String? DestinationName { get; }
+        public MailboxId? DestinationMailboxId { get; }
+        public DateTimeOffset ExecuteAtUtc { get; }
+        public Boolean IsExecuting { get; set; }
+
+        public Int32 RemainingSeconds
+        {
+            get
+            {
+                var seconds = (Int32)Math.Ceiling((ExecuteAtUtc - DateTimeOffset.UtcNow).TotalSeconds);
+                return seconds < 0 ? 0 : seconds;
+            }
+        }
     }
 }

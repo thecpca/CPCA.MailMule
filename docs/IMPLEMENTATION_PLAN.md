@@ -140,8 +140,6 @@ MailMule.slnx
 - Remove SQLite-specific projects (`CPCA.MailMule.Persistence.Sqlite`, `CPCA.MailMule.Sqlite`).
 - Keep PostgreSQL as the only database provider for v2.
 
-```
-
 ## [x] Phase 0 — Constraints Document
 
 ### Goal
@@ -183,7 +181,7 @@ Scaffold the solution and all projects so that the build is green before any imp
 
 ---
 
-## [ ] Phase 2 — Configuration & Admin Backbone
+## [x] Phase 2 — Configuration & Admin Backbone
 
 ### Goal
 
@@ -234,7 +232,7 @@ from day one.
 
 ---
 
-## Phase 3 — IMAP Abstraction Layer
+## [ ] Phase 3 — IMAP Abstraction Layer
 
 ### Goal
 
