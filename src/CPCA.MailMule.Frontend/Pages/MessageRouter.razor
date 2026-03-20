@@ -2,6 +2,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components
 @attribute [Authorize(Roles = "Operator,Admin")]
+@attribute [KingOfTheHill(Kingdom.MessageRouting)]
 @implements IDisposable
 
 <PageTitle>Message Routing</PageTitle>

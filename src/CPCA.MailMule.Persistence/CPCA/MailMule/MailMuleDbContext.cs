@@ -150,7 +150,11 @@ public sealed class MailMuleDbContext(DbContextOptions<MailMuleDbContext> option
         {
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Id)
-                .ValueGeneratedNever();
+                .ValueGeneratedOnAdd();
+
+            entity.Property(x => x.Kingdom)
+                .HasConversion<Int32>()
+                .IsRequired();
 
             entity.Property(x => x.UserId)
                 .HasMaxLength(255)
@@ -165,6 +169,9 @@ public sealed class MailMuleDbContext(DbContextOptions<MailMuleDbContext> option
 
             entity.Property(x => x.LastActivityUtc)
                 .IsRequired();
+
+            entity.HasIndex(x => x.Kingdom)
+                .IsUnique();
         });
 
         base.OnModelCreating(modelBuilder);

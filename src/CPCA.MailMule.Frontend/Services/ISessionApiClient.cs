@@ -2,10 +2,10 @@ namespace CPCA.MailMule.Frontend.Services;
 
 public interface ISessionApiClient
 {
-    Task<SessionStatusDto?> GetStatusAsync(CancellationToken cancellationToken = default);
-    Task<SessionClaimResultDto?> ClaimAsync(CancellationToken cancellationToken = default);
-    Task<Boolean> HeartbeatAsync(CancellationToken cancellationToken = default);
-    Task<Boolean> ReleaseAsync(CancellationToken cancellationToken = default);
+    Task<SessionStatusDto?> GetStatusAsync(Kingdom kingdom, CancellationToken cancellationToken = default);
+    Task<SessionClaimResultDto?> ClaimAsync(Kingdom kingdom, CancellationToken cancellationToken = default);
+    Task<Boolean> HeartbeatAsync(Kingdom kingdom, CancellationToken cancellationToken = default);
+    Task<Boolean> ReleaseAsync(Kingdom kingdom);
 }
 
 public record SessionStatusDto(
@@ -14,7 +14,8 @@ public record SessionStatusDto(
     String? CurrentKingUserName,
     DateTimeOffset SessionStartedUtc,
     DateTimeOffset LastActivityUtc,
-    Int32 InactivityTimeoutMinutes
+    Int32 InactivityTimeoutMinutes,
+    Kingdom Kingdom
 );
 
 public record SessionClaimResultDto(

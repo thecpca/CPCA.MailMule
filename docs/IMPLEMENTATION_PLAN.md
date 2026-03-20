@@ -60,15 +60,46 @@ IMPORTANT: No operations are executed against the IMAP folders by the server unt
 - The background worker continuously synchronizes incoming state into in-process projection.
 - Message state is NOT persisted across sessions. If the front end application is closed when messages have been queued for routing and the Undo Timers have not elapsed, nothing is saved. The next time the application is opened and the user logs in, the Inbox will show the aggregated incoming messages at that point in time and the outbox will be empty.
 
-### 👤 Single Operator
+### 👤 King of the Hill — Per-Kingdom Session Exclusivity
 
-- No concurrency concerns, no claim workflows.
-- First user logged in wins. They are the King of the Hill.
-- If other users log in, they are shown a message stating that they cannot proceed because another user is the "king of the hill".
-  - If the first user has been inactive for 30 minutes, the subsequent login from a different user should end the first user's session and the new user becomes the king of the hill.
-  - Subsequent users who are denied must be shown who is currently the king of the hill, allowing contact with each other through alternate channels.
-- Inactivity timeout is stored in `ApplicationSettings.InactivityTimeoutMinutes` (default: 30).
-- No Application Settings UI is in current scope; this value is configured at the data/configuration level only.
+Certain workflows require single-operator exclusivity. Rather than locking the entire application, exclusivity is scoped to **kingdoms** — logical groups of pages that share a single "King of the Hill" lock.
+
+#### Kingdoms
+
+- A `Kingdom` enum (`CPCA.MailMule.Domain.Shared`) defines the available groups.
+- Initial kingdoms: `MessageRouting` (1) and `ErrorQueue` (2).
+- A page belongs to at most one kingdom. Not all pages require exclusivity.
+- A user MAY hold kingship in multiple kingdoms simultaneously.
+- Inactivity timers are tracked **per kingdom**, not per user.
+
+#### Attribute-Based Declaration
+
+- Pages that require exclusivity are decorated with `[KingOfTheHill(Kingdom.X)]` (defined in `CPCA.MailMule.Application.Contracts`).
+- Pages without the attribute are unrestricted — no session check occurs.
+- The attribute targets classes only (`[AttributeUsage(AttributeTargets.Class)]`), is not inheritable, and does not allow multiples.
+
+#### Backend Enforcement
+
+- The backend maintains an `ActiveSession` row per kingdom in the database (unique index on `Kingdom`).
+- Session endpoints are kingdom-scoped: `/session/{kingdom}/status`, `/session/{kingdom}/claim`, `/session/{kingdom}/heartbeat`, `/session/{kingdom}/release`.
+- When a user claims a kingdom, the backend checks for an existing session:
+  - If no session exists, the user becomes king.
+  - If the current king has been inactive longer than `ApplicationSettings.InactivityTimeoutMinutes`, the new user usurps the session.
+  - If the current king is still active, the claim is denied and the response includes the current king's identity.
+- Heartbeat calls update `LastActivityUtc` for the specific kingdom.
+
+#### Frontend SessionMonitor
+
+- `SessionMonitor.razor` is integrated at the `MainLayout` level and receives the current page type via a cascading `RouteData` parameter.
+- On each navigation, `SessionMonitor` uses reflection to check whether the routed page type carries a `[KingOfTheHillAttribute]`.
+  - If present: claims the kingdom, starts a heartbeat timer, and shows a blocking overlay if the user is not king.
+  - If absent: tears down any active session for the previous kingdom and renders the page without restriction.
+- When the user navigates away from a kingdom-protected page, `SessionMonitor` releases the session for that kingdom.
+
+#### Inactivity Timeout
+
+- Stored in `ApplicationSettings.InactivityTimeoutMinutes` (default: 30).
+- Configured via the `/admin/app-settings` page (Admin role only).
 
 ### ⏱️ Routing Has a 15-Second Undo Window
 
@@ -231,6 +262,14 @@ Current status:
 
 **`ApplicationSettings`** (single-row table)
 - `InactivityTimeoutMinutes` (int) — default 30
+
+**`ActiveSession`** (one row per kingdom, unique index on `Kingdom`)
+- `Id` (int) — auto-generated identity
+- `Kingdom` (Kingdom enum, stored as int) — which exclusivity group this session governs
+- `UserId` (string, max 255) — the OIDC subject identifier of the current king
+- `UserName` (string, max 255) — display name of the current king (shown to denied users)
+- `SessionStartedUtc` (DateTimeOffset) — when the user first claimed this kingdom
+- `LastActivityUtc` (DateTimeOffset) — updated on every heartbeat; used for inactivity timeout comparison
 
 ### Secret Handling
 

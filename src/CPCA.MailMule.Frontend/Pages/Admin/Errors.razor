@@ -4,6 +4,7 @@
 @using CPCA.MailMule.Dtos
 @using CPCA.MailMule.Frontend.Services
 @attribute [Authorize(Roles = "Admin")]
+@attribute [KingOfTheHill(Kingdom.ErrorQueue)]
 @inject IErrorQueueApiClient ErrorQueueApiClient
 @inject ISnackbar Snackbar
 

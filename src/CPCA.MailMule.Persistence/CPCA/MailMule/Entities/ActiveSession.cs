@@ -2,7 +2,9 @@ namespace CPCA.MailMule;
 
 public sealed class ActiveSession
 {
-    public Int32 Id { get; set; } = 1;
+    public Int32 Id { get; set; }
+
+    public Kingdom Kingdom { get; set; }
 
     public required String UserId { get; set; }
 

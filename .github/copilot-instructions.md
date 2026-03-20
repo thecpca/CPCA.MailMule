@@ -1,5 +1,22 @@
 # CPCA.MailMule.v2 Copilot Instructions
 
+## Environment
+
+- OS: **Windows 11 Professional**
+- IDE: **Visual Studio 2026** or **Visual Studio Code with C# extensions**
+- Shell: **PowerShell 7.5.5**
+- SDK: **.NET 10.0 SDK**
+
+You MUST use **PowerShell-native commands and syntax** when generating terminal commands. You **MUST NOT** use Bash, sh, or other Unix-style commands.
+
+  - `ls` → `Get-ChildItem`  
+  - `grep` → `Select-String`  
+  - `tail` → `Get-Content -Tail`  
+  - `cat` → `Get-Content`  
+  - `rm` → `Remove-Item`  
+
+Prefer full cmdlet names over aliases unless the user explicitly asks for aliases.
+
 ## Build, test, and lint commands
 
 - Build the solution with `dotnet build MailMule.slnx`.

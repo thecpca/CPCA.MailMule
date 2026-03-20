@@ -2,11 +2,21 @@
   <Folder Name="/.dev/">
     <File Path=".editorconfig" />
     <File Path=".gitignore" />
+    <File Path="COPILOT.md" />
     <File Path="Directory.Build.props" />
     <File Path="LICENSE.md" />
     <File Path="README.md" />
     <File Path="version.json" />
     <File Path="virtual-folders.json" />
+  </Folder>
+  <Folder Name="/.docs/">
+    <File Path="docs/DESIGN_DISCUSSION.md" />
+    <File Path="docs/END_TO_END_TEST_PLAN.md" />
+    <File Path="docs/IMAP-Router-Constraints.md" />
+    <File Path="docs/IMPLEMENTATION_PLAN.md" />
+    <File Path="docs/REFACTOR_BFF.md" />
+    <File Path="docs/SECRETS_TO_ENCRYPTED_AT_REST.md" />
+    <File Path="docs/TODO.md" />
   </Folder>
   <Folder Name="/aspire/">
     <Project Path="aspire/CPCA.MailMule.AppHost/CPCA.MailMule.AppHost.csproj" />
@@ -16,13 +26,13 @@
     <File Path=".editorconfig" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/CPCA.MailMule.ImapService/CPCA.MailMule.ImapService.csproj" />
     <Project Path="src/CPCA.MailMule.Application.Contracts/CPCA.MailMule.Application.Contracts.csproj" />
     <Project Path="src/CPCA.MailMule.Application/CPCA.MailMule.Application.csproj" />
     <Project Path="src/CPCA.MailMule.Backend/CPCA.MailMule.Backend.csproj" />
     <Project Path="src/CPCA.MailMule.Core/CPCA.MailMule.Core.csproj" />
     <Project Path="src/CPCA.MailMule.Domain.Shared/CPCA.MailMule.Domain.Shared.csproj" />
     <Project Path="src/CPCA.MailMule.Domain/CPCA.MailMule.Domain.csproj" />
+    <Project Path="src/CPCA.MailMule.ImapService/CPCA.MailMule.ImapService.csproj" />
     <Project Path="src/CPCA.MailMule.Persistence.PostgreSql/CPCA.MailMule.Persistence.PostgreSql.csproj" />
     <Project Path="src/CPCA.MailMule.Persistence/CPCA.MailMule.Persistence.csproj" />
     <Project Path="src/CPCA.MailMule.Shared/CPCA.MailMule.Shared.csproj" />

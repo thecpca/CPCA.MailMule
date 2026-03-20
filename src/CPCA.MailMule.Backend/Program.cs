@@ -177,11 +177,11 @@ public static class Program
 
         builder.Services.AddSingleton<InternalTokenService>();
 
-        // -----------------------------
-        // Minimal API
-        // -----------------------------
         var app = builder.Build();
 
+        // -----------------------------
+        // Database migration on startup.
+        // -----------------------------
         using (var scope = app.Services.CreateScope())
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<MailMuleDbContext>();
@@ -204,6 +204,9 @@ public static class Program
         app.UseAuthentication();
         app.UseAuthorization();
 
+        // -----------------------------
+        // Minimal API
+        // -----------------------------
         // Catch-all forwarding to the ImapService. The JwtInjectingTransformer adds
         // the internal Bearer token so the ImapService can validate the caller.
         // The local /api/secure endpoint below takes priority over this catch-all.
@@ -622,22 +625,22 @@ public static class Program
         // Session / King of the Hill endpoints
         // -----------------------------
 
-        // GET /session/status - Get current session status
-        app.MapGet("/session/status", async (IKingOfTheHillService service, HttpContext ctx, CancellationToken ct) =>
+        // GET /session/{kingdom}/status - Get current session status for a kingdom
+        app.MapGet("/session/{kingdom}/status", async (Kingdom kingdom, IKingOfTheHillService service, HttpContext ctx, CancellationToken ct) =>
         {
             if (!ctx.User.Identity?.IsAuthenticated ?? true)
             {
                 return Results.Json(null, statusCode: StatusCodes.Status401Unauthorized);
             }
-            var status = await service.GetSessionStatusAsync(ct);
+            var status = await service.GetSessionStatusAsync(kingdom, ct);
             return Results.Ok(status);
         })
         .WithName("GetSessionStatus")
         .Produces<SessionStatusDto>(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status401Unauthorized);
 
-        // POST /session/claim - Attempt to claim kingship
-        app.MapPost("/session/claim", async (IKingOfTheHillService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
+        // POST /session/{kingdom}/claim - Attempt to claim kingship of a kingdom
+        app.MapPost("/session/{kingdom}/claim", async (Kingdom kingdom, IKingOfTheHillService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
         {
             if (!context.User.Identity?.IsAuthenticated ?? true)
             {
@@ -649,13 +652,13 @@ public static class Program
                 ?? "unknown";
             var userName = context.User.Identity?.Name ?? "Unknown";
 
-            var result = await service.ClaimKingshipAsync(userId, userName, ct);
+            var result = await service.ClaimKingshipAsync(kingdom, userId, userName, ct);
 
             if (!result.Success)
             {
                 logger.LogWarning(
-                    "User {UserId} ({UserName}) denied king of the hill. Current king: {CurrentKing}",
-                    userId, userName, result.CurrentKingUserName);
+                    "User {UserId} ({UserName}) denied king of the hill for {Kingdom}. Current king: {CurrentKing}",
+                    userId, userName, kingdom, result.CurrentKingUserName);
             }
 
             return Results.Ok(result);
@@ -664,29 +667,29 @@ public static class Program
         .Produces<SessionClaimResult>(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status401Unauthorized);
 
-        // POST /session/heartbeat - Record activity
-        app.MapPost("/session/heartbeat", async (IKingOfTheHillService service, HttpContext ctx, CancellationToken ct) =>
+        // POST /session/{kingdom}/heartbeat - Record activity for a kingdom
+        app.MapPost("/session/{kingdom}/heartbeat", async (Kingdom kingdom, IKingOfTheHillService service, HttpContext ctx, CancellationToken ct) =>
         {
             if (!ctx.User.Identity?.IsAuthenticated ?? true)
             {
                 return Results.Json(null, statusCode: StatusCodes.Status401Unauthorized);
             }
-            await service.RecordActivityAsync(ct);
+            await service.RecordActivityAsync(kingdom, ct);
             return Results.NoContent();
         })
         .WithName("RecordActivity")
         .Produces(StatusCodes.Status204NoContent)
         .Produces(StatusCodes.Status401Unauthorized);
 
-        // POST /session/release - Release kingship
-        app.MapPost("/session/release", async (IKingOfTheHillService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
+        // POST /session/{kingdom}/release - Release kingship of a kingdom
+        app.MapPost("/session/{kingdom}/release", async (Kingdom kingdom, IKingOfTheHillService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
         {
             if (!context.User.Identity?.IsAuthenticated ?? true)
             {
                 return Results.Json(null, statusCode: StatusCodes.Status401Unauthorized);
             }
-            await service.ReleaseKingshipAsync(ct);
-            logger.LogInformation("User {User} released king of the hill", GetCurrentUserName(context));
+            await service.ReleaseKingshipAsync(kingdom, ct);
+            logger.LogInformation("User {User} released king of the hill for {Kingdom}", GetCurrentUserName(context), kingdom);
             return Results.NoContent();
         })
         .WithName("ReleaseKingship")

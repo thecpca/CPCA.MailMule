@@ -1,3 +1,4 @@
+@using CPCA.MailMule.Frontend.Components
 @inherits LayoutComponentBase
 
 <MudThemeProvider Theme="@_theme" IsDarkMode="_isDarkMode" />
@@ -22,7 +23,9 @@
     </MudDrawer>
 
     <MudMainContent Class="pt-16 pa-4">
-        @Body
+        <SessionMonitor PageType="@CurrentRouteData?.PageType">
+            @Body
+        </SessionMonitor>
     </MudMainContent>
 </MudLayout>
 
@@ -30,6 +33,9 @@
     private bool _drawerOpen = true;
     private bool _isDarkMode = true;
     private MudTheme? _theme;
+
+    [CascadingParameter(Name = "CurrentRouteData")]
+    public RouteData? CurrentRouteData { get; set; }
 
     protected override void OnInitialized()
     {

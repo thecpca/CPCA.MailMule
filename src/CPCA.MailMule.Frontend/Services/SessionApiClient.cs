@@ -11,11 +11,11 @@ public sealed class SessionApiClient : ISessionApiClient
         this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
     }
 
-    public async Task<SessionStatusDto?> GetStatusAsync(CancellationToken cancellationToken = default)
+    public async Task<SessionStatusDto?> GetStatusAsync(Kingdom kingdom, CancellationToken cancellationToken = default)
     {
         try
         {
-            var response = await this.httpClient.GetAsync("/session/status", cancellationToken);
+            var response = await this.httpClient.GetAsync($"/session/{kingdom}/status", cancellationToken);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<SessionStatusDto>(cancellationToken);
         }
@@ -25,11 +25,11 @@ public sealed class SessionApiClient : ISessionApiClient
         }
     }
 
-    public async Task<SessionClaimResultDto?> ClaimAsync(CancellationToken cancellationToken = default)
+    public async Task<SessionClaimResultDto?> ClaimAsync(Kingdom kingdom, CancellationToken cancellationToken = default)
     {
         try
         {
-            var response = await this.httpClient.PostAsync("/session/claim", null, cancellationToken);
+            var response = await this.httpClient.PostAsync($"/session/{kingdom}/claim", null, cancellationToken);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<SessionClaimResultDto>(cancellationToken);
         }
@@ -39,11 +39,11 @@ public sealed class SessionApiClient : ISessionApiClient
         }
     }
 
-    public async Task<Boolean> HeartbeatAsync(CancellationToken cancellationToken = default)
+    public async Task<Boolean> HeartbeatAsync(Kingdom kingdom, CancellationToken cancellationToken = default)
     {
         try
         {
-            var response = await this.httpClient.PostAsync("/session/heartbeat", null, cancellationToken);
+            var response = await this.httpClient.PostAsync($"/session/{kingdom}/heartbeat", null, cancellationToken);
             return response.IsSuccessStatusCode;
         }
         catch (Exception)
@@ -52,11 +52,11 @@ public sealed class SessionApiClient : ISessionApiClient
         }
     }
 
-    public async Task<Boolean> ReleaseAsync(CancellationToken cancellationToken = default)
+    public async Task<Boolean> ReleaseAsync(Kingdom kingdom)
     {
         try
         {
-            var response = await this.httpClient.PostAsync("/session/release", null, cancellationToken);
+            var response = await this.httpClient.PostAsync($"/session/{kingdom}/release", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception)

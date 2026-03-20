@@ -1,3 +1,4 @@
+@using System.Reflection
 @using CPCA.MailMule.Frontend.Services
 @inject ISessionApiClient SessionApiClient
 @implements IDisposable
@@ -13,7 +14,7 @@
                 Session Denied
             </MudText>
             <MudText Typo="Typo.body1" GutterBottom="true">
-                Another user is currently the active operator.
+                Another user is currently the active operator for @_kingdom.
             </MudText>
             <MudDivider Style="margin: 1rem 0;" />
             <MudText Typo="Typo.subtitle2" Color="Color.Secondary">
@@ -45,21 +46,61 @@
     private CancellationTokenSource? _cts;
     private Timer? _heartbeatTimer;
     private Timer? _refreshTimer;
+    private Kingdom? _kingdom;
 
+    /// <summary>
+    /// The child content to render. When used as a layout wrapper, this is the page body.
+    /// </summary>
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
 
-    protected override async Task OnInitializedAsync()
+    /// <summary>
+    /// The page component type resolved by the router. The component reads the
+    /// <see cref="KingOfTheHillAttribute"/> from this type to determine kingdom membership.
+    /// </summary>
+    [Parameter]
+    public Type? PageType { get; set; }
+
+    protected override async Task OnParametersSetAsync()
     {
-        _cts = new CancellationTokenSource();
-        await ClaimKingshipAsync(_cts.Token);
-        StartHeartbeat();
-        StartRefreshCheck();
+        var newKingdom = ResolveKingdom();
+
+        if (newKingdom == _kingdom)
+        {
+            return;
+        }
+
+        await TearDownSessionAsync();
+
+        _kingdom = newKingdom;
+
+        if (_kingdom.HasValue)
+        {
+            _cts = new CancellationTokenSource();
+            await ClaimKingshipAsync(_kingdom.Value, _cts.Token);
+            StartHeartbeat(_kingdom.Value);
+            StartRefreshCheck();
+        }
+        else
+        {
+            _isBlocked = false;
+        }
     }
 
-    private async Task ClaimKingshipAsync(CancellationToken cancellationToken)
+    private Kingdom? ResolveKingdom()
     {
-        var result = await SessionApiClient.ClaimAsync(cancellationToken);
+        if (PageType is null)
+        {
+            return null;
+        }
+
+        var attribute = PageType.GetCustomAttribute<KingOfTheHillAttribute>();
+        return attribute?.Kingdom;
+    }
+
+    private async Task ClaimKingshipAsync(Kingdom kingdom, CancellationToken cancellationToken)
+    {
+        var result = await SessionApiClient.ClaimAsync(kingdom, cancellationToken);
 
         if (result is null)
         {
@@ -71,7 +112,7 @@
             _isBlocked = true;
             _currentKingName = result.CurrentKingUserName ?? "Unknown";
 
-            var status = await SessionApiClient.GetStatusAsync(cancellationToken);
+            var status = await SessionApiClient.GetStatusAsync(kingdom, cancellationToken);
             if (status is not null)
             {
                 UpdateTimeUntilTimeout(status);
@@ -89,8 +130,8 @@
 
     private async Task CheckStatus()
     {
-        if (_cts?.IsCancellationRequested == true) return;
-        var status = await SessionApiClient.GetStatusAsync(_cts?.Token ?? CancellationToken.None);
+        if (_cts?.IsCancellationRequested == true || !_kingdom.HasValue) return;
+        var status = await SessionApiClient.GetStatusAsync(_kingdom.Value, _cts?.Token ?? CancellationToken.None);
 
         if (status is null) return;
 
@@ -119,13 +160,13 @@
         _timeUntilTimeout = remaining > TimeSpan.Zero ? remaining : null;
     }
 
-    private void StartHeartbeat()
+    private void StartHeartbeat(Kingdom kingdom)
     {
         _heartbeatTimer = new Timer(
             async _ =>
             {
                 if (_cts?.IsCancellationRequested == true || _isBlocked) return;
-                await SessionApiClient.HeartbeatAsync(_cts?.Token ?? CancellationToken.None);
+                await SessionApiClient.HeartbeatAsync(kingdom, _cts?.Token ?? CancellationToken.None);
             },
             null,
             TimeSpan.FromSeconds(30),
@@ -141,11 +182,32 @@
             TimeSpan.FromMinutes(1));
     }
 
+    private async Task TearDownSessionAsync()
+    {
+        _cts?.Cancel();
+        _heartbeatTimer?.Dispose();
+        _heartbeatTimer = null;
+        _refreshTimer?.Dispose();
+        _refreshTimer = null;
+
+        if (_kingdom.HasValue)
+        {
+            await SessionApiClient.ReleaseAsync(_kingdom.Value);
+        }
+
+        _cts?.Dispose();
+        _cts = null;
+    }
+
     public void Dispose()
     {
         _cts?.Cancel();
         _heartbeatTimer?.Dispose();
         _refreshTimer?.Dispose();
-        _ = SessionApiClient.ReleaseAsync();
+
+        if (_kingdom.HasValue)
+        {
+            _ = SessionApiClient.ReleaseAsync(_kingdom.Value);
+        }
     }
 }

@@ -1,8 +1,9 @@
-﻿@using CPCA.MailMule.Frontend.Components
+@using CPCA.MailMule.Frontend.Components
+
 <CascadingAuthenticationState>
-    <SessionMonitor>
-        <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)" >
-            <Found Context="routeData">
+    <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)" >
+        <Found Context="routeData">
+            <CascadingValue Value="@routeData" Name="CurrentRouteData">
                 <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
                     <NotAuthorized>
                         @if (context.User.Identity?.IsAuthenticated != true)
@@ -15,8 +16,8 @@
                         }
                     </NotAuthorized>
                 </AuthorizeRouteView>
-                @* <FocusOnNavigate RouteData="@routeData" Selector="h1" /> *@
-            </Found>
-        </Router>
-    </SessionMonitor>
+            </CascadingValue>
+            @* <FocusOnNavigate RouteData="@routeData" Selector="h1" /> *@
+        </Found>
+    </Router>
 </CascadingAuthenticationState>
