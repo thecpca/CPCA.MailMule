@@ -1,35 +1,33 @@
 @using MudBlazor
 @using Microsoft.AspNetCore.Authorization
-@page "/admin/settings"
+@page "/admin/app-settings"
 @using CPCA.MailMule.Dtos
 @using CPCA.MailMule.Frontend.Services
-@attribute [Authorize(Roles = "Operator,Admin")]
-@inject IUserSettingsApiClient SettingsApiClient
+@attribute [Authorize(Roles = "Admin")]
+@inject IApplicationSettingsApiClient AppSettingsApiClient
 @inject ISnackbar Snackbar
 
-<PageTitle>User Settings</PageTitle>
+<PageTitle>Application Settings</PageTitle>
 
 <MudStack Spacing="3">
-    <MudText Typo="Typo.h4">User Settings</MudText>
+    <MudText Typo="Typo.h4">Application Settings</MudText>
 
     @if (loading)
     {
         <MudProgressCircular Indeterminate="true" />
     }
-    else if (userSettings != null)
+    else if (appSettings != null)
     {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            Changes to application settings affect all users.
+        </MudAlert>
+
         <MudPaper Class="pa-4" MaxWidth="600px">
             <MudStack Spacing="3">
-                <MudNumericField @bind-Value="userSettings.UndoWindowSeconds"
-                    Label="Undo Window (seconds)"
-                    HelperText="Time before a queued message is automatically sent (5–60)"
-                    Min="5" Max="60"
-                    Variant="Variant.Outlined" />
-
-                <MudNumericField @bind-Value="userSettings.PageSize"
-                    Label="Page Size"
-                    HelperText="Number of messages per page (10–100)"
-                    Min="10" Max="100"
+                <MudNumericField @bind-Value="appSettings.InactivityTimeoutMinutes"
+                    Label="Inactivity Timeout (minutes)"
+                    HelperText="Auto-release king of the hill after inactivity (5–120)"
+                    Min="5" Max="120"
                     Variant="Variant.Outlined" />
             </MudStack>
         </MudPaper>
@@ -52,7 +50,7 @@
 </MudStack>
 
 @code {
-    private UserSettingsModel? userSettings;
+    private AppSettingsModel? appSettings;
     private Boolean loading = true;
     private Boolean saving;
 
@@ -66,14 +64,13 @@
         loading = true;
         try
         {
-            var userDto = await SettingsApiClient.GetAsync();
+            var appDto = await AppSettingsApiClient.GetAsync();
 
-            if (userDto != null)
+            if (appDto != null)
             {
-                userSettings = new UserSettingsModel
+                appSettings = new AppSettingsModel
                 {
-                    UndoWindowSeconds = userDto.UndoWindowSeconds,
-                    PageSize = userDto.PageSize
+                    InactivityTimeoutMinutes = appDto.InactivityTimeoutMinutes
                 };
             }
         }
@@ -85,22 +82,22 @@
 
     private async Task SaveAsync()
     {
-        if (userSettings == null) return;
+        if (appSettings == null) return;
 
         saving = true;
         try
         {
-            var userDto = new UserSettingsDto(userSettings.UndoWindowSeconds, userSettings.PageSize);
+            var appDto = new ApplicationSettingsDto(appSettings.InactivityTimeoutMinutes);
 
-            var success = await SettingsApiClient.UpdateAsync(userDto);
+            var success = await AppSettingsApiClient.UpdateAsync(appDto);
 
             if (success)
             {
-                Snackbar.Add("Settings saved.", Severity.Success);
+                Snackbar.Add("Application settings saved.", Severity.Success);
             }
             else
             {
-                Snackbar.Add("Failed to save settings.", Severity.Error);
+                Snackbar.Add("Failed to save application settings.", Severity.Error);
             }
         }
         finally
@@ -109,9 +106,8 @@
         }
     }
 
-    private sealed class UserSettingsModel
+    private sealed class AppSettingsModel
     {
-        public Int32 UndoWindowSeconds { get; set; }
-        public Int32 PageSize { get; set; }
+        public Int32 InactivityTimeoutMinutes { get; set; }
     }
 }

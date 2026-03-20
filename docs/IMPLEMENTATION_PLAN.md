@@ -198,8 +198,10 @@ from day one.
 Current status:
 - Mailbox configuration persistence, CRUD APIs, and `/admin/incoming` + `/admin/outgoing` pages are implemented.
 - Connection testing is implemented.
-- `ApplicationSettings` and `UserSettings` persistence, services, DTOs, API endpoints, and `/admin/settings` UI are implemented.
-- `/admin/settings` includes both `UserSettings` (UndoWindowSeconds, PageSize) and `ApplicationSettings` (InactivityTimeoutMinutes).
+- `ApplicationSettings` and `UserSettings` persistence, services, DTOs, API endpoints are implemented.
+- `/admin/settings` (Operator/Admin) contains UserSettings (UndoWindowSeconds, PageSize).
+- `/admin/app-settings` (Admin only) contains ApplicationSettings (InactivityTimeoutMinutes).
+- **Folder discovery is not yet implemented** — administrators must manually enter folder paths.
 
 ### Data Model (persisted through EF Core)
 
@@ -212,14 +214,16 @@ Current status:
 - `Security` (Enum: Undefined, Ssl, Tls, Auto)
 - `Username` (string)
 - `EncryptedPassword` (string) — Data Protection-protected password payload
-- `InboxFolder` (string) — e.g., `INBOX`
-- `JunkFolder` (string) — e.g., `Junk E-mail`
-- `ArchiveFolder` (string) - e.g., `Archives`
-- `ErrorFolder` (string) - e.g., `Error`
+- `InboxFolderPath` (string) — e.g., `INBOX`
+- `JunkFolderPath` (string) — e.g., `Junk E-mail` (required for Incoming mailboxes)
+- `ArchiveFolderPath` (string) — e.g., `Archives` (required for Incoming mailboxes when DeleteMessage = false)
+- `ErrorFolderPath` (string) — e.g., `Error`
 - `PollIntervalSeconds` (int) — default 20
 - `DeleteMessage` (boolean) — default false (Archive)
 - `IsActive` (bool)
 - `LastPolledUtc` (DateTimeOffset)
+
+> **Note on Folder Names**: IMAP folder naming conventions vary by server. "INBOX" is the standard default folder, but some servers (e.g., SmarterMail) may use different conventions. When configuring a mailbox, administrators should verify or select the correct folder path.
 
 **`UserSettings`** (single-row table)
 - `UndoWindowSeconds` (int) — default 15; valid range 5–60
@@ -238,9 +242,42 @@ Current status:
 
 ### Admin UI (MudBlazor, protected by `Admin` role)
 
-- `/admin/incoming` — list/add/edit/remove `MailboxConfig.MailboxType == Incoming` records; connection-test button.
+- `/admin/incoming` — list/add/edit/remove `MailboxConfig.MailboxType == Incoming` records.
+  - **Folder Discovery**: After entering credentials, admin can click "Discover Folders" to retrieve a list of top-level folders from the IMAP server.
+  - This confirms INBOX existence or allows selection of the correct default folder.
+  - **Required folders for Incoming mailboxes**:
+    - Inbox folder (selectable from discovered folders, defaults to `INBOX`)
+    - Archive folder (selectable from discovered folders, required when `DeleteMessage = false`)
+    - Junk folder (selectable from discovered folders)
+  - Connection-test button.
 - `/admin/outgoing` — list/add/edit/remove `MailboxConfig.MailboxType == Outgoing` records; drag-to-reorder `SortOrder`.
+  - **Folder discovery required**: Admin must select the default (destination) folder from discovered folders. INBOX is suggested as default if it exists, but any top-level folder can be selected.
 - `/admin/settings` — edit `UserSettings`.
+
+### Folder Discovery (Phase 2.5)
+
+#### Goal
+
+Allow administrators to discover available folders on an IMAP server before saving mailbox configuration. This ensures correct folder paths and is required for configuring Archive and Junk folders on incoming mailboxes.
+
+#### Implementation
+
+1. **Backend** (`IImapConnectionTester` or new `IFolderDiscoveryService`):
+   - Add method to retrieve top-level folders from IMAP server
+   - Reuse existing IMAP connection logic from `IImapConnectionTester`
+
+2. **Backend API** (`/admin/incoming/test-connection` → extend or new endpoint):
+   - Add optional parameter to include folder list in connection test response
+   - Or create new `/admin/discover-folders` endpoint
+
+3. **Frontend** (`MailboxConfigForm`):
+   - Add "Discover Folders" button (appears after successful connection test)
+   - Display list of folders in a selectable dropdown
+   - Auto-populate folder fields when selected
+
+4. **Validation**:
+   - Incoming mailboxes: require Inbox, Archive (if DeleteMessage=false), and Junk folder selection
+   - Outgoing mailboxes: require selection of default (destination) folder from discovered folders
 
 ---
 
@@ -285,7 +322,14 @@ public interface IStringProtector
   String Protect(String plainText);
   String Unprotect(String cipherText);
 }
+
+public interface IFolderDiscoveryService
+{
+    Task<IReadOnlyList<String>> GetTopLevelFoldersAsync(MailboxConnectionTestRequest request, CancellationToken cancellationToken = default);
+}
 ```
+
+> **Folder Discovery**: The `IFolderDiscoveryService` interface allows administrators to retrieve a list of top-level folders from an IMAP server before saving mailbox configuration. This helps confirm the correct folder names (e.g., `INBOX` vs `INBOX/Test`) and allows selection of Archive and Junk folders for incoming mailboxes.
 
 ### Implementation Rules
 

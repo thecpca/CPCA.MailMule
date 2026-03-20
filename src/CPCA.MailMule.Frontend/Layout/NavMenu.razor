@@ -2,6 +2,7 @@
     <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
     <AuthorizeView Roles="Operator,Admin">
         <MudNavLink Href="message/router" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.ForwardToInbox">Message Router</MudNavLink>
+        <MudNavLink Href="admin/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Tune">My Settings</MudNavLink>
     </AuthorizeView>
     
     <MudDivider Class="my-2" />
@@ -10,7 +11,7 @@
         <MudNavGroup Title="Admin" Icon="@Icons.Material.Filled.Settings" Expanded="false">
             <MudNavLink Href="admin/incoming" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Mail">Incoming Mailboxes</MudNavLink>
             <MudNavLink Href="admin/outgoing" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.MailOutline">Outgoing Mailboxes</MudNavLink>
-            <MudNavLink Href="admin/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Tune">Settings</MudNavLink>
+            <MudNavLink Href="admin/app-settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AdminPanelSettings">Application Settings</MudNavLink>
             <MudNavLink Href="admin/errors" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.ErrorOutline">Error Queue</MudNavLink>
         </MudNavGroup>
     </AuthorizeView>

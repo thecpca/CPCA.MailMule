@@ -17,6 +17,8 @@
         "backchannel",
         "connstring",
         "imapservice",
-        "slnx"
+        "nowrap",
+        "slnx",
+        "starttls"
     ]
 }

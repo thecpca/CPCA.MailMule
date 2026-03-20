@@ -1,0 +1,151 @@
+@using CPCA.MailMule.Frontend.Services
+@inject ISessionApiClient SessionApiClient
+@implements IDisposable
+
+@ChildContent
+
+@if (_isBlocked)
+{
+    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+        <MudPaper Elevation="4" Style="max-width: 500px; padding: 2rem; text-align: center;">
+            <MudIcon Icon="@Icons.Material.Filled.Block" Size="Size.Large" Color="Color.Warning" Style="margin-bottom: 1rem;" />
+            <MudText Typo="Typo.h5" Color="Color.Warning" GutterBottom="true">
+                Session Denied
+            </MudText>
+            <MudText Typo="Typo.body1" GutterBottom="true">
+                Another user is currently the active operator.
+            </MudText>
+            <MudDivider Style="margin: 1rem 0;" />
+            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">
+                Current operator: <strong>@_currentKingName</strong>
+            </MudText>
+            @if (_timeUntilTimeout.HasValue)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="margin-top: 0.5rem;">
+                    Will become available in @(_timeUntilTimeout.Value.TotalMinutes.ToString("F0")) minutes
+                </MudText>
+            }
+            <MudDivider Style="margin: 1rem 0;" />
+            <MudText Typo="Typo.caption" Color="Color.Default">
+                Please contact the current operator or wait for their session to expire.
+            </MudText>
+            <div style="margin-top: 1.5rem;">
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="async () => await CheckStatus()">
+                    Refresh Status
+                </MudButton>
+            </div>
+        </MudPaper>
+    </div>
+}
+
+@code {
+    private Boolean _isBlocked;
+    private String? _currentKingName;
+    private TimeSpan? _timeUntilTimeout;
+    private CancellationTokenSource? _cts;
+    private Timer? _heartbeatTimer;
+    private Timer? _refreshTimer;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cts = new CancellationTokenSource();
+        await ClaimKingshipAsync(_cts.Token);
+        StartHeartbeat();
+        StartRefreshCheck();
+    }
+
+    private async Task ClaimKingshipAsync(CancellationToken cancellationToken)
+    {
+        var result = await SessionApiClient.ClaimAsync(cancellationToken);
+
+        if (result is null)
+        {
+            return;
+        }
+
+        if (!result.Success)
+        {
+            _isBlocked = true;
+            _currentKingName = result.CurrentKingUserName ?? "Unknown";
+
+            var status = await SessionApiClient.GetStatusAsync(cancellationToken);
+            if (status is not null)
+            {
+                UpdateTimeUntilTimeout(status);
+            }
+        }
+        else
+        {
+            _isBlocked = false;
+            _currentKingName = null;
+            _timeUntilTimeout = null;
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task CheckStatus()
+    {
+        if (_cts?.IsCancellationRequested == true) return;
+        var status = await SessionApiClient.GetStatusAsync(_cts?.Token ?? CancellationToken.None);
+
+        if (status is null) return;
+
+        if (!status.IsCurrentUserKing && status.CurrentKingUserId is not null)
+        {
+            _isBlocked = true;
+            _currentKingName = status.CurrentKingUserName ?? "Unknown";
+            UpdateTimeUntilTimeout(status);
+            StateHasChanged();
+        }
+        else
+        {
+            _isBlocked = false;
+            _currentKingName = null;
+            _timeUntilTimeout = null;
+            StateHasChanged();
+        }
+    }
+
+    private void UpdateTimeUntilTimeout(SessionStatusDto status)
+    {
+        var timeout = TimeSpan.FromMinutes(status.InactivityTimeoutMinutes);
+        var elapsed = DateTimeOffset.UtcNow - status.LastActivityUtc;
+        var remaining = timeout - elapsed;
+
+        _timeUntilTimeout = remaining > TimeSpan.Zero ? remaining : null;
+    }
+
+    private void StartHeartbeat()
+    {
+        _heartbeatTimer = new Timer(
+            async _ =>
+            {
+                if (_cts?.IsCancellationRequested == true || _isBlocked) return;
+                await SessionApiClient.HeartbeatAsync(_cts?.Token ?? CancellationToken.None);
+            },
+            null,
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromSeconds(30));
+    }
+
+    private void StartRefreshCheck()
+    {
+        _refreshTimer = new Timer(
+            async _ => await CheckStatus(),
+            null,
+            TimeSpan.FromMinutes(1),
+            TimeSpan.FromMinutes(1));
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _heartbeatTimer?.Dispose();
+        _refreshTimer?.Dispose();
+        _ = SessionApiClient.ReleaseAsync();
+    }
+}

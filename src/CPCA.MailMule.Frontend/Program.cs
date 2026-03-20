@@ -59,6 +59,8 @@ public static class Program
         builder.Services.AddScoped<IApplicationSettingsApiClient>(sp => sp.GetRequiredService<ApplicationSettingsApiClient>());
         builder.Services.AddScoped<ErrorQueueApiClient>();
         builder.Services.AddScoped<IErrorQueueApiClient>(sp => sp.GetRequiredService<ErrorQueueApiClient>());
+        builder.Services.AddScoped<SessionApiClient>();
+        builder.Services.AddScoped<ISessionApiClient>(sp => sp.GetRequiredService<SessionApiClient>());
         builder.Services.AddScoped<PostOffice>();
         builder.Services.AddScoped<PostOfficeWorker>();
 

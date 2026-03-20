@@ -20,6 +20,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IUserSettingsService, UserSettingsService>();
         services.AddScoped<IApplicationSettingsService, ApplicationSettingsService>();
         services.AddScoped<IIncomingMessageService, IncomingMessageService>();
+        services.AddScoped<IKingOfTheHillService, KingOfTheHillService>();
 
         return services;
     }

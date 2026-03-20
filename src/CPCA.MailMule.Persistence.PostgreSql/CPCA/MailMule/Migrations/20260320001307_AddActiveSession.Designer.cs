@@ -3,6 +3,7 @@ using System;
 using CPCA.MailMule;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CPCA.MailMule.Migrations
 {
     [DbContext(typeof(MailMuleDbContext))]
-    partial class MailMuleDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260320001307_AddActiveSession")]
+    partial class AddActiveSession
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

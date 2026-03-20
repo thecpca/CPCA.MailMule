@@ -25,42 +25,108 @@
             Variant="Variant.Outlined" 
             HelperText="@(IsEditing ? "Leave blank to keep existing password" : "Required for new mailbox")" />
         
-        <MudButton Variant="Variant.Outlined" OnClick="@TestConnection">Test Connection</MudButton>
-        @if (!string.IsNullOrEmpty(ConnectionTestMessage))
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@DiscoverFolders" Disabled="@IsDiscovering">
+            @if (IsDiscovering)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Discover Folders
+        </MudButton>
+
+        @if (DiscoveredFolders.Count > 0)
         {
-            <MudAlert Severity="@(ConnectionTestSuccess ? Severity.Success : Severity.Error)">
-                @ConnectionTestMessage
+            <MudAlert Severity="Severity.Success" Dense="true">
+                Connected! Found @DiscoveredFolders.Count folder(s). Use the folders section below to configure.
             </MudAlert>
         }
 
-        <MudExpansionPanel Text="Advanced Settings">
-            <MudStack Spacing="2">
-                <MudTextField @bind-Value="formData.InboxFolderPath" Label="Inbox Folder Path" 
-                    Variant="Variant.Outlined" HelperText="Leave empty for default" />
-                
-                <MudTextField @bind-Value="formData.OutboxFolderPath" Label="Outbox Folder Path" 
-                    Variant="Variant.Outlined" HelperText="Leave empty for default" />
-                
-                <MudTextField @bind-Value="formData.SentFolderPath" Label="Sent Folder Path" 
-                    Variant="Variant.Outlined" HelperText="Leave empty for default" />
-                
-                <MudTextField @bind-Value="formData.ArchiveFolderPath" Label="Archive Folder Path" 
-                    Variant="Variant.Outlined" HelperText="Required for incoming mailboxes when messages are retained" />
+        @if (!String.IsNullOrEmpty(DiscoveryMessage) && DiscoveredFolders.Count == 0)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true">
+                @DiscoveryMessage
+            </MudAlert>
+        }
 
-                <MudTextField @bind-Value="formData.JunkFolderPath" Label="Junk Folder Path"
-                    Variant="Variant.Outlined" HelperText="Required for incoming mailboxes" />
+        <MudExpansionPanels>
+            <MudExpansionPanel Text="Folders" is-initially-expanded="@(DiscoveredFolders.Count > 0)">
+                <MudStack Spacing="2">
+                    @if (DiscoveredFolders.Count > 0)
+                    {
+                        @if (IsIncoming)
+                        {
+                            <MudSelect T="String" @bind-Value="formData.InboxFolderPath" Label="Inbox Folder *" Required="true"
+                                Variant="Variant.Outlined">
+                                @foreach (var folder in DiscoveredFolders)
+                                {
+                                    <MudSelectItem T="String" Value="@folder">@folder</MudSelectItem>
+                                }
+                            </MudSelect>
 
-                <MudNumericField @bind-Value="formData.PollIntervalSeconds" Label="Polling Interval (seconds)" 
-                    Variant="Variant.Outlined" Min="10" Max="3600" HelperText="How often to check for new messages" />
+                            <MudSelect T="String" @bind-Value="formData.JunkFolderPath" Label="Junk Folder *" Required="true"
+                                Variant="Variant.Outlined">
+                                <MudSelectItem T="String" Value="@("")"><em>-- Select --</em></MudSelectItem>
+                                @foreach (var folder in DiscoveredFolders)
+                                {
+                                    <MudSelectItem T="String" Value="@folder">@folder</MudSelectItem>
+                                }
+                            </MudSelect>
 
-                <MudCheckBox T="Boolean" @bind-Value="formData.DeleteMessage" Label="Delete message after fetching" />
-                
-                <MudCheckBox T="Boolean" @bind-Value="formData.IsActive" Label="Active" />
+                            <MudSelect T="String" @bind-Value="formData.ArchiveFolderPath" Label="Archive Folder *" Required="@(!formData.DeleteMessage)"
+                                Variant="Variant.Outlined"
+                                HelperText="@(formData.DeleteMessage ? "Not required when deleting messages" : "Required when archiving messages")">
+                                <MudSelectItem T="String" Value="@("")"><em>-- Select --</em></MudSelectItem>
+                                @foreach (var folder in DiscoveredFolders)
+                                {
+                                    <MudSelectItem T="String" Value="@folder">@folder</MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                        else
+                        {
+                            <MudSelect T="String" @bind-Value="formData.OutboxFolderPath" Label="Destination Folder *" Required="true"
+                                Variant="Variant.Outlined"
+                                HelperText="This is where routed messages will be delivered">
+                                <MudSelectItem T="String" Value="@("")"><em>-- Select --</em></MudSelectItem>
+                                @foreach (var folder in DiscoveredFolders)
+                                {
+                                    <MudSelectItem T="String" Value="@folder">@folder</MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true">
+                            Click "Discover Folders" to retrieve available folders from the IMAP server.
+                        </MudAlert>
+                    }
+                </MudStack>
+            </MudExpansionPanel>
 
-                <MudNumericField @bind-Value="formData.SortOrder" Label="Sort Order" 
-                    Variant="Variant.Outlined" HelperText="Display order in list" />
-            </MudStack>
-        </MudExpansionPanel>
+            <MudExpansionPanel Text="Advanced Settings">
+                <MudStack Spacing="2">
+                    <MudNumericField @bind-Value="formData.PollIntervalSeconds" Label="Polling Interval (seconds)" 
+                        Variant="Variant.Outlined" Min="10" Max="3600" HelperText="How often to check for new messages" />
+
+                    @if (IsIncoming)
+                    {
+                        <MudCheckBox T="Boolean" @bind-Value="formData.DeleteMessage" Label="Delete message after routing (instead of archiving)" />
+                    }
+                    
+                    <MudCheckBox T="Boolean" @bind-Value="formData.IsActive" Label="Active" />
+                    
+                    <MudNumericField @bind-Value="formData.SortOrder" Label="Sort Order" 
+                        Variant="Variant.Outlined" HelperText="Display order in list" />
+                </MudStack>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+
+        @if (!String.IsNullOrEmpty(ValidationMessage))
+        {
+            <MudAlert Severity="Severity.Error">
+                @ValidationMessage
+            </MudAlert>
+        }
 
         <MudStack Row="true" Class="mt-4">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" 
@@ -75,9 +141,13 @@
 @code {
     private MudForm? form;
     private bool isFormValid;
-    private string? ConnectionTestMessage;
-    private bool ConnectionTestSuccess;
     private FormData formData = new();
+    private List<String> DiscoveredFolders { get; set; } = new();
+    private String? DiscoveryMessage;
+    private String? ValidationMessage;
+    private Boolean IsDiscovering;
+
+    private bool IsIncoming => Request.MailboxType.Equals("Incoming", StringComparison.OrdinalIgnoreCase);
 
     private class FormData
     {
@@ -137,7 +207,6 @@
 
     protected override void OnParametersSet()
     {
-        // Initialize form data from Request parameter
         formData.DisplayName = Request.DisplayName ?? "";
         formData.ImapHost = Request.ImapHost ?? "";
         formData.ImapPort = Request.ImapPort;
@@ -155,30 +224,106 @@
         formData.SortOrder = Request.SortOrder;
     }
 
-    private async Task TestConnection()
+    private async Task DiscoverFolders()
     {
         if (ApiClient == null) return;
 
-        var testRequest = new MailboxConnectionTestRequest(
-            ImapHost: formData.ImapHost,
-            ImapPort: formData.ImapPort,
-            Security: formData.Security,
-            Username: formData.Username,
-            Password: formData.Password ?? ""
-        );
+        ValidationMessage = null;
+        IsDiscovering = true;
+        DiscoveredFolders.Clear();
+        DiscoveryMessage = null;
 
-        var result = await ApiClient.TestConnectionAsync(testRequest, Request.MailboxType);
-        
-        if (result == null)
+        try
         {
-            ConnectionTestMessage = "Connection test failed";
-            ConnectionTestSuccess = false;
+            var testRequest = new MailboxConnectionTestRequest(
+                ImapHost: formData.ImapHost,
+                ImapPort: formData.ImapPort,
+                Security: formData.Security,
+                Username: formData.Username,
+                Password: formData.Password ?? ""
+            );
+
+            var result = await ApiClient.TestConnectionAsync(testRequest, Request.MailboxType);
+            
+            if (result == null)
+            {
+                DiscoveryMessage = "Connection test failed. Please check your credentials.";
+            }
+            else if (!result.Success)
+            {
+                DiscoveryMessage = result.Message ?? "Connection failed.";
+                DiscoveredFolders.Clear();
+            }
+            else
+            {
+                DiscoveredFolders = result.FolderList?.ToList() ?? new List<String>();
+                
+                if (DiscoveredFolders.Count == 0)
+                {
+                    DiscoveryMessage = "Connected but no folders found.";
+                }
+                else
+                {
+                    DiscoveryMessage = null;
+                    if (String.IsNullOrEmpty(formData.InboxFolderPath) && IsIncoming && DiscoveredFolders.Any(f => f.Equals("INBOX", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        formData.InboxFolderPath = "INBOX";
+                    }
+                }
+            }
+        }
+        finally
+        {
+            IsDiscovering = false;
+        }
+    }
+
+    private bool ValidateForm()
+    {
+        ValidationMessage = null;
+
+        if (IsIncoming)
+        {
+            if (DiscoveredFolders.Count == 0)
+            {
+                ValidationMessage = "Please discover folders first by clicking 'Discover Folders'.";
+                return false;
+            }
+
+            if (String.IsNullOrWhiteSpace(formData.InboxFolderPath))
+            {
+                ValidationMessage = "Inbox Folder is required.";
+                return false;
+            }
+
+            if (String.IsNullOrWhiteSpace(formData.JunkFolderPath))
+            {
+                ValidationMessage = "Junk Folder is required.";
+                return false;
+            }
+
+            if (!formData.DeleteMessage && String.IsNullOrWhiteSpace(formData.ArchiveFolderPath))
+            {
+                ValidationMessage = "Archive Folder is required when not deleting messages.";
+                return false;
+            }
         }
         else
         {
-            ConnectionTestMessage = result.Message ?? (result.Success ? "Connection successful!" : "Connection failed");
-            ConnectionTestSuccess = result.Success;
+            if (DiscoveredFolders.Count == 0)
+            {
+                ValidationMessage = "Please discover folders first by clicking 'Discover Folders'.";
+                return false;
+            }
+
+            if (String.IsNullOrWhiteSpace(formData.OutboxFolderPath))
+            {
+                ValidationMessage = "Destination Folder is required.";
+                return false;
+            }
         }
+
+        return true;
     }
 
     private async Task OnSubmit()
@@ -189,6 +334,8 @@
         }
 
         if (!isFormValid) return;
+        
+        if (!ValidateForm()) return;
 
         IsSaving = true;
         var updatedRequest = new CreateMailboxConfigDto(
@@ -202,8 +349,8 @@
             InboxFolderPath: formData.InboxFolderPath,
             OutboxFolderPath: formData.OutboxFolderPath,
             SentFolderPath: formData.SentFolderPath,
-            ArchiveFolderPath: formData.ArchiveFolderPath,
-            JunkFolderPath: formData.JunkFolderPath,
+            ArchiveFolderPath: String.IsNullOrWhiteSpace(formData.ArchiveFolderPath) ? null : formData.ArchiveFolderPath,
+            JunkFolderPath: String.IsNullOrWhiteSpace(formData.JunkFolderPath) ? null : formData.JunkFolderPath,
             PollIntervalSeconds: formData.PollIntervalSeconds,
             DeleteMessage: formData.DeleteMessage,
             IsActive: formData.IsActive,

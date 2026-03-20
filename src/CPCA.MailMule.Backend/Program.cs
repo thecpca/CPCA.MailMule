@@ -12,9 +12,9 @@
 // You should have received a copy of the GNU Affero General Public License along with this
 // program. If not, see <https://www.gnu.org/licenses/>.
 
-using CPCA.MailMule;
 using CPCA.MailMule.Backend.HealthChecks;
 using CPCA.MailMule.Backend.Middleware;
+using CPCA.MailMule.Backend.Options;
 using CPCA.MailMule.Backend.Services;
 using CPCA.MailMule.Dtos;
 using CPCA.MailMule.Services;
@@ -22,11 +22,12 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
+using System.Security.Claims;
 using System.Net.Http.Headers;
 using Yarp.ReverseProxy.Forwarder;
 
@@ -66,6 +67,9 @@ public static class Program
             .AddHealthChecks()
             .AddCheck<BackendDatabaseReadyHealthCheck>("database", tags: ["ready"]);
 
+        builder.Services.Configure<BffAuthorizationOptions>(builder.Configuration.GetSection("Authorization"));
+        builder.Services.AddTransient<IClaimsTransformation, BffRoleClaimsTransformation>();
+
         // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
         builder.Services.AddOpenApi();
 
@@ -93,6 +97,28 @@ public static class Program
 
             options.SlidingExpiration = true;
             options.ExpireTimeSpan = TimeSpan.FromDays(7);
+
+            options.Events.OnRedirectToLogin = context =>
+            {
+                if (IsAjaxRequest(context.Request))
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    return Task.CompletedTask;
+                }
+                context.Response.Redirect(context.RedirectUri);
+                return Task.CompletedTask;
+            };
+
+            options.Events.OnRedirectToAccessDenied = context =>
+            {
+                if (IsAjaxRequest(context.Request))
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    return Task.CompletedTask;
+                }
+                context.Response.Redirect(context.RedirectUri);
+                return Task.CompletedTask;
+            };
         })
         .AddOpenIdConnect(options =>
         {
@@ -118,6 +144,7 @@ public static class Program
             options.GetClaimsFromUserInfoEndpoint = true;
 
             options.TokenValidationParameters.NameClaimType = "name";
+            options.TokenValidationParameters.RoleClaimType = ClaimTypes.Role;
         });
 
         builder.Services.AddAuthorization(options =>
@@ -154,6 +181,12 @@ public static class Program
         // Minimal API
         // -----------------------------
         var app = builder.Build();
+
+        using (var scope = app.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<MailMuleDbContext>();
+            await dbContext.Database.MigrateAsync();
+        }
 
         app.UseMiddleware<CorrelationIdMiddleware>();
         app.UseSerilogRequestLogging();
@@ -209,14 +242,20 @@ public static class Program
         {
             if (!ctx.User.Identity?.IsAuthenticated ?? true)
             {
+                if (IsAjaxRequest(ctx.Request))
+                {
+                    return Results.Json(null, statusCode: StatusCodes.Status401Unauthorized);
+                }
                 return Results.Unauthorized();
             }
 
             var name = ctx.User.Identity!.Name ?? "Unknown";
 
             var roles = ctx.User.Claims
-                .Where(c => c.Type is "role" or "roles")
+                .Where(c => c.Type == ClaimTypes.Role)
                 .Select(c => c.Value)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(static role => role, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
             return Results.Ok(new
@@ -224,8 +263,7 @@ public static class Program
                 name,
                 roles
             });
-        })
-        .RequireAuthorization();
+        });
 
         app.MapHealthChecks("/health/live", new HealthCheckOptions
         {
@@ -240,7 +278,7 @@ public static class Program
         // -----------------------------
         // Admin API endpoints
         // -----------------------------
-        
+
         // GET /admin/incoming - List all incoming mailboxes
         app.MapGet("/admin/incoming", async (IMailboxConfigService service, CancellationToken ct) =>
         {
@@ -489,7 +527,7 @@ public static class Program
             var settings = await service.GetAsync(ct);
             return Results.Ok(settings);
         })
-        .RequireAuthorization("Admin")
+        .RequireAuthorization("Operator")
         .WithName("GetUserSettings")
         .Produces<UserSettingsDto>();
 
@@ -506,7 +544,7 @@ public static class Program
 
             return Results.NoContent();
         })
-        .RequireAuthorization("Admin")
+        .RequireAuthorization("Operator")
         .WithName("UpdateUserSettings")
         .Produces(StatusCodes.Status204NoContent);
 
@@ -581,12 +619,104 @@ public static class Program
         .Produces(StatusCodes.Status404NotFound);
 
         // -----------------------------
+        // Session / King of the Hill endpoints
+        // -----------------------------
+
+        // GET /session/status - Get current session status
+        app.MapGet("/session/status", async (IKingOfTheHillService service, HttpContext ctx, CancellationToken ct) =>
+        {
+            if (!ctx.User.Identity?.IsAuthenticated ?? true)
+            {
+                return Results.Json(null, statusCode: StatusCodes.Status401Unauthorized);
+            }
+            var status = await service.GetSessionStatusAsync(ct);
+            return Results.Ok(status);
+        })
+        .WithName("GetSessionStatus")
+        .Produces<SessionStatusDto>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status401Unauthorized);
+
+        // POST /session/claim - Attempt to claim kingship
+        app.MapPost("/session/claim", async (IKingOfTheHillService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
+        {
+            if (!context.User.Identity?.IsAuthenticated ?? true)
+            {
+                return Results.Json(null, statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            var userId = context.User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value
+                ?? context.User.Identity?.Name
+                ?? "unknown";
+            var userName = context.User.Identity?.Name ?? "Unknown";
+
+            var result = await service.ClaimKingshipAsync(userId, userName, ct);
+
+            if (!result.Success)
+            {
+                logger.LogWarning(
+                    "User {UserId} ({UserName}) denied king of the hill. Current king: {CurrentKing}",
+                    userId, userName, result.CurrentKingUserName);
+            }
+
+            return Results.Ok(result);
+        })
+        .WithName("ClaimKingship")
+        .Produces<SessionClaimResult>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status401Unauthorized);
+
+        // POST /session/heartbeat - Record activity
+        app.MapPost("/session/heartbeat", async (IKingOfTheHillService service, HttpContext ctx, CancellationToken ct) =>
+        {
+            if (!ctx.User.Identity?.IsAuthenticated ?? true)
+            {
+                return Results.Json(null, statusCode: StatusCodes.Status401Unauthorized);
+            }
+            await service.RecordActivityAsync(ct);
+            return Results.NoContent();
+        })
+        .WithName("RecordActivity")
+        .Produces(StatusCodes.Status204NoContent)
+        .Produces(StatusCodes.Status401Unauthorized);
+
+        // POST /session/release - Release kingship
+        app.MapPost("/session/release", async (IKingOfTheHillService service, HttpContext context, ILogger<AdminApiLog> logger, CancellationToken ct) =>
+        {
+            if (!context.User.Identity?.IsAuthenticated ?? true)
+            {
+                return Results.Json(null, statusCode: StatusCodes.Status401Unauthorized);
+            }
+            await service.ReleaseKingshipAsync(ct);
+            logger.LogInformation("User {User} released king of the hill", GetCurrentUserName(context));
+            return Results.NoContent();
+        })
+        .WithName("ReleaseKingship")
+        .Produces(StatusCodes.Status204NoContent)
+        .Produces(StatusCodes.Status401Unauthorized);
+
+        // -----------------------------
         await app.RunAsync();
     }
 
     private static String GetCurrentUserName(HttpContext context)
     {
         return context.User.Identity?.Name ?? "Unknown";
+    }
+
+    private static Boolean IsAjaxRequest(HttpRequest request)
+    {
+        if (request.Headers.TryGetValue("X-Requested-With", out var requestedWithValues)
+            && requestedWithValues.Any(value => String.Equals(value, "XMLHttpRequest", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        if (request.GetTypedHeaders().Accept?.Any(header =>
+                String.Equals(header.MediaType.Value, "application/json", StringComparison.OrdinalIgnoreCase)) == true)
+        {
+            return true;
+        }
+
+        return request.Headers.ContainsKey("Authorization");
     }
 
     private static IReadOnlyList<String> GetChangedFields(MailboxConfigDto existingMailbox, UpdateMailboxConfigDto updatedMailbox)

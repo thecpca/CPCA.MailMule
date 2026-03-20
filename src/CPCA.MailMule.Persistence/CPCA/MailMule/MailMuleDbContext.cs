@@ -12,6 +12,8 @@ public sealed class MailMuleDbContext(DbContextOptions<MailMuleDbContext> option
 
     public DbSet<ApplicationSettings> ApplicationSettings => Set<ApplicationSettings>();
 
+    public DbSet<ActiveSession> ActiveSessions => Set<ActiveSession>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<MailboxConfig>(entity =>
@@ -142,6 +144,27 @@ public sealed class MailMuleDbContext(DbContextOptions<MailMuleDbContext> option
                 .IsUnique();
 
             entity.HasIndex(x => new { x.MailboxConfigId, x.State });
+        });
+
+        modelBuilder.Entity<ActiveSession>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id)
+                .ValueGeneratedNever();
+
+            entity.Property(x => x.UserId)
+                .HasMaxLength(255)
+                .IsRequired();
+
+            entity.Property(x => x.UserName)
+                .HasMaxLength(255)
+                .IsRequired();
+
+            entity.Property(x => x.SessionStartedUtc)
+                .IsRequired();
+
+            entity.Property(x => x.LastActivityUtc)
+                .IsRequired();
         });
 
         base.OnModelCreating(modelBuilder);
