@@ -1,0 +1,21 @@
+<Project>
+  <Target Name="ApplyContainerVersionOverrides" AfterTargets="GetBuildVersion">
+    <PropertyGroup Condition="'$(ContainerBuildVersion)' != ''">
+      <Version>$(ContainerBuildVersion)</Version>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(ContainerAssemblyVersion)' != ''">
+      <AssemblyVersion>$(ContainerAssemblyVersion)</AssemblyVersion>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(ContainerFileVersion)' != ''">
+      <AssemblyFileVersion>$(ContainerFileVersion)</AssemblyFileVersion>
+      <FileVersion>$(ContainerFileVersion)</FileVersion>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(ContainerInformationalVersion)' != ''">
+      <AssemblyInformationalVersion>$(ContainerInformationalVersion)</AssemblyInformationalVersion>
+      <InformationalVersion>$(ContainerInformationalVersion)</InformationalVersion>
+    </PropertyGroup>
+  </Target>
+</Project>
