@@ -615,11 +615,11 @@ Current status:
 
 ## [ ] Phase 10 — Deployment
 
-- Docker Compose on Synology RackStation RS1619xs+, DSM v7.3.x
+- Docker Compose on cpcad01 (Ubuntu 24.04 LTS)
   - Authentik:latest
   - PostgreSql:latest
   - ImapService
   - Backend
   - Frontend
 - Local bind mounts instead of Docker Volumes
-- Reverse Proxy in Synology DSM handles SSL termination
+- Caddy handles SSL termination
